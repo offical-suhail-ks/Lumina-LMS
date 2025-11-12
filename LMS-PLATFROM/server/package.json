@@ -1,0 +1,42 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "nodemon src/index.js",
+    "start": "node src/index.js",
+    "maildev": "maildev",
+    "dev:all": "concurrently \"npm run maildev\" \"npm run dev\"",
+    "db:init": "node database/init.js",
+    "db:reset": "node database/init.js",
+    "db:migrate": "node database/migrate-schema.js",
+    "db:fix-auth": "node database/fix_auth.js",
+    "db:test": "node src/test-connection.js",
+    "db:check-admin": "node src/check-admin.js",
+    "db:create-faculty": "node database/create-faculty.js",
+        "db:migrate-student-fields": "node database/migrate-add-student-fields.js",
+        "db:migrate-total-years": "node database/migrate-add-total-years.js",
+        "db:migrate-departments": "node database/migrate-add-departments.js",
+        "db:migrate-payments": "node database/migrate-add-payments.js",
+        "db:migrate-fee-due-date": "node database/migrate-add-fee-due-date.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "mariadb": "^3.4.5",
+    "multer": "^2.0.2",
+    "nodemailer": "^7.0.10",
+    "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "maildev": "^2.2.1",
+    "nodemon": "^3.1.11"
+  }
+}
