@@ -1,0 +1,199 @@
+import React, { useMemo } from 'react';
+import { Navigate, Route, Routes } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
+import DashboardLayout from '../layouts/DashboardLayout';
+import ProtectedRoute from '../components/ProtectedRoute';
+import { login as loginAction } from '../store/authSlice';
+import { login as loginApi } from '../services/authService';
+
+// Auth
+import Login from '../pages/Login';
+import Register from '../pages/Register';
+import NotFound from '../pages/NotFound';
+
+// Dashboards
+import DashboardOverview from '../pages/dashboard/DashboardOverview';
+import AdminDashboard from '../pages/dashboard/AdminDashboard';
+import FacultyDashboard from '../pages/dashboard/FacultyDashboard';
+import ParentDashboard from '../pages/dashboard/ParentDashboard';
+import ManageStudents from '../pages/admin/ManageStudents';
+import ManageFaculty from '../pages/admin/ManageFaculty';
+import ManageCourses from '../pages/admin/ManageCourses';
+import ManageAssignments from '../pages/admin/ManageAssignments';
+import ManageFees from '../pages/admin/ManageFees';
+
+// Features
+import CourseList from '../pages/courses/CourseList';
+import CourseDetails from '../pages/courses/CourseDetails';
+import AssignmentList from '../pages/assignments/AssignmentList';
+import SubmitAssignment from '../pages/assignments/SubmitAssignment';
+import CalendarView from '../pages/calendar/CalendarView';
+import Inbox from '../pages/mailbox/Inbox';
+import SendMail from '../pages/mailbox/SendMail';
+import ViewFees from '../pages/fees/ViewFees';
+import PayFees from '../pages/fees/PayFees';
+import StudentProfile from '../pages/profile/StudentProfile';
+import ParentProfile from '../pages/profile/ParentProfile';
+import FacultyProfile from '../pages/profile/FacultyProfile';
+import GradeSubmissions from '../pages/faculty/GradeSubmissions';
+import MyCourses from '../pages/faculty/MyCourses';
+import StudentRoster from '../pages/faculty/StudentRoster';
+import CreateAssignment from '../pages/faculty/CreateAssignment';
+import ViewGrades from '../pages/students/ViewGrades';
+import MySubmissions from '../pages/students/MySubmissions';
+import AcademicTranscript from '../pages/students/AcademicTranscript';
+import CourseProgress from '../pages/students/CourseProgress';
+import StudySchedule from '../pages/students/StudySchedule';
+import ResourcesLibrary from '../pages/students/ResourcesLibrary';
+import CourseModules from '../pages/students/CourseModules';
+import ManageModules from '../pages/faculty/ManageModules';
+
+const AppRoutes = () => {
+  const dispatch = useDispatch();
+  const { isAuthenticated, user } = useSelector(state => state.auth);
+
+  const dashboardElement = useMemo(() => {
+    switch (user?.role) {
+      case 'admin':
+        return <AdminDashboard />;
+      case 'faculty':
+        return <FacultyDashboard />;
+      case 'parent':
+        return <ParentDashboard />;
+      default:
+        return <DashboardOverview />;
+    }
+  }, [user?.role]);
+
+  const handleLogin = async credentials => {
+    try {
+      const response = await loginApi(credentials.username, credentials.password);
+          dispatch(
+            loginAction({
+              id: response.user.id,
+              name: response.user.name,
+              email: response.user.email,
+              role: response.user.role,
+              department: response.user.department || null,
+              token: response.token,
+            })
+          );
+      return true;
+    } catch (error) {
+      console.error(error);
+      return false;
+    }
+  };
+
+  return (
+    <Routes>
+      <Route
+        path="/login"
+        element={
+          isAuthenticated ? (
+            <Navigate to="/dashboard" replace />
+          ) : (
+            <Login onLogin={handleLogin} />
+          )
+        }
+      />
+      <Route path="/register" element={<Register />} />
+
+      <Route
+        path="/"
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated}>
+            <DashboardLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<Navigate to="/dashboard" replace />} />
+        <Route path="dashboard" element={dashboardElement} />
+        <Route path="courses" element={<CourseList />} />
+        <Route path="courses/:id" element={<CourseDetails />} />
+        <Route path="assignments" element={<AssignmentList />} />
+        <Route path="assignments/submit" element={<SubmitAssignment />} />
+        <Route path="calendar" element={<CalendarView />} />
+        <Route path="mailbox" element={<Inbox />} />
+        <Route path="mailbox/send" element={<SendMail />} />
+        <Route path="fees" element={<ViewFees />} />
+        <Route path="fees/pay" element={<PayFees />} />
+        <Route path="profile" element={user?.role === 'faculty' ? <FacultyProfile /> : user?.role === 'parent' ? <ParentProfile /> : <StudentProfile />} />
+        <Route path="profile/parent" element={<ParentProfile />} />
+        <Route path="profile/faculty" element={<FacultyProfile />} />
+        <Route
+          path="faculty/grade-submissions"
+          element={user?.role === 'faculty' ? <GradeSubmissions /> : <Navigate to="/dashboard" replace />}
+        />
+        <Route
+          path="faculty/my-courses"
+          element={user?.role === 'faculty' ? <MyCourses /> : <Navigate to="/dashboard" replace />}
+        />
+        <Route
+          path="faculty/student-roster"
+          element={user?.role === 'faculty' ? <StudentRoster /> : <Navigate to="/dashboard" replace />}
+        />
+        <Route
+          path="faculty/create-assignment"
+          element={user?.role === 'faculty' ? <CreateAssignment /> : <Navigate to="/dashboard" replace />}
+        />
+        <Route
+          path="students/view-grades"
+          element={user?.role === 'student' ? <ViewGrades /> : <Navigate to="/dashboard" replace />}
+        />
+        <Route
+          path="students/my-submissions"
+          element={user?.role === 'student' ? <MySubmissions /> : <Navigate to="/dashboard" replace />}
+        />
+        <Route
+          path="students/transcript"
+          element={user?.role === 'student' ? <AcademicTranscript /> : <Navigate to="/dashboard" replace />}
+        />
+        <Route
+          path="students/course-progress"
+          element={user?.role === 'student' ? <CourseProgress /> : <Navigate to="/dashboard" replace />}
+        />
+        <Route
+          path="students/study-schedule"
+          element={user?.role === 'student' ? <StudySchedule /> : <Navigate to="/dashboard" replace />}
+        />
+        <Route
+          path="students/resources"
+          element={user?.role === 'student' ? <ResourcesLibrary /> : <Navigate to="/dashboard" replace />}
+        />
+        <Route
+          path="students/course-modules/:courseId"
+          element={user?.role === 'student' ? <CourseModules /> : <Navigate to="/dashboard" replace />}
+        />
+        <Route
+          path="faculty/manage-modules/:courseId"
+          element={user?.role === 'faculty' ? <ManageModules /> : <Navigate to="/dashboard" replace />}
+        />
+        <Route
+          path="admin/students"
+          element={user?.role === 'admin' ? <ManageStudents /> : <Navigate to="/dashboard" replace />}
+        />
+        <Route
+          path="admin/faculty"
+          element={user?.role === 'admin' ? <ManageFaculty /> : <Navigate to="/dashboard" replace />}
+        />
+        <Route
+          path="admin/courses"
+          element={user?.role === 'admin' ? <ManageCourses /> : <Navigate to="/dashboard" replace />}
+        />
+            <Route
+              path="admin/assignments"
+              element={user?.role === 'admin' ? <ManageAssignments /> : <Navigate to="/dashboard" replace />}
+            />
+            <Route
+              path="admin/fees"
+              element={user?.role === 'admin' ? <ManageFees /> : <Navigate to="/dashboard" replace />}
+            />
+      </Route>
+
+      <Route path="*" element={<NotFound />} />
+    </Routes>
+  );
+};
+
+export default AppRoutes;
