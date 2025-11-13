@@ -24,3 +24,18 @@ export const deleteCourse = async courseId => {
   const response = await api.delete(`/courses/${courseId}`);
   return response.data;
 };
+
+export const enrollInCourse = async (courseId, studentId) => {
+  const response = await api.post(`/courses/${courseId}/enroll`, { studentId });
+  return response.data;
+};
+
+export const unenrollFromCourse = async (courseId, studentId) => {
+  const response = await api.delete(`/courses/${courseId}/enroll/${studentId}`);
+  return response.data;
+};
+
+export const getStudentCourses = async (studentId) => {
+  const response = await api.get(`/students/${studentId}/courses`);
+  return response.data;
+};

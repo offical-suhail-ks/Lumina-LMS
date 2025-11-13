@@ -9,6 +9,8 @@ import { login as loginApi } from '../services/authService';
 // Auth
 import Login from '../pages/Login';
 import Register from '../pages/Register';
+import ForgotPassword from '../pages/auth/ForgotPassword';
+import ResetPassword from '../pages/auth/ResetPassword';
 import NotFound from '../pages/NotFound';
 
 // Dashboards
@@ -107,6 +109,8 @@ const AppRoutes = () => {
         }
       />
       <Route path="/register" element={<Register />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
 
       <Route
         path="/"

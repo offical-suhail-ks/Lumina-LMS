@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import AuthLayout from '../layouts/AuthLayout';
 
 const ADMIN_CREDENTIALS = {
@@ -7,7 +8,7 @@ const ADMIN_CREDENTIALS = {
 };
 
 const Login = ({ onLogin }) => {
-  const [username, setUsername] = useState(ADMIN_CREDENTIALS.username);
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
@@ -33,7 +34,7 @@ const Login = ({ onLogin }) => {
       );
 
       if (!success) {
-        setError('Invalid credentials. Use admin / admin to access the dashboard.');
+        setError('Invalid credentials. If forgot password reset.');
       }
     } catch (error) {
       console.error(error);
@@ -47,7 +48,7 @@ const Login = ({ onLogin }) => {
     <AuthLayout>
       <div className="mb-10 text-center">
         <h2 className="text-3xl font-semibold tracking-tight text-slate-900">Welcome back</h2>
-        <p className="mt-2 text-sm text-slate-500">Only administrators can access this workspace for now.</p>
+        <p className="mt-2 text-sm text-slate-500">Access to LMS platform</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
@@ -56,10 +57,11 @@ const Login = ({ onLogin }) => {
           <input
             type="text"
             autoComplete="username"
-            placeholder="admin"
-            className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none ring-offset-1 transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+            placeholder="Enter your username"
+            className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-black outline-none ring-offset-1 transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
             value={username}
             onChange={e => setUsername(e.target.value)}
+            style={{ color: '#000000' }}
           />
         </label>
 
@@ -68,15 +70,30 @@ const Login = ({ onLogin }) => {
           <input
             type="password"
             autoComplete="current-password"
-            placeholder="admin"
-            className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none ring-offset-1 transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+            placeholder="Enter your password"
+            className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-black outline-none ring-offset-1 transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
             value={password}
             onChange={e => setPassword(e.target.value)}
+            style={{ color: '#000000' }}
           />
         </label>
 
         {error && (
-          <p className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-medium text-red-500">{error}</p>
+          <div className="space-y-3">
+            <p className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-medium text-red-500">{error}</p>
+            <div className="text-center">
+              <Link
+                to="/forgot-password"
+                className="inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-700 underline underline-offset-2 transition-colors"
+                style={{ textDecoration: 'underline', color: '#2563eb' }}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                </svg>
+                Forgot Password?
+              </Link>
+            </div>
+          </div>
         )}
 
         <button
@@ -90,11 +107,23 @@ const Login = ({ onLogin }) => {
               <span className="relative inline-flex h-3 w-3 rounded-full bg-white" />
             </span>
           ) : null}
-          {isSubmitting ? 'Signing you in...' : 'Sign in as admin'}
+          {isSubmitting ? 'Signing you in...' : 'Sign in'}
         </button>
       </form>
 
-      <p className="mt-8 text-center text-xs text-slate-400">
+      {!error && (
+        <div className="mt-6 text-center">
+          <Link
+            to="/forgot-password"
+            className="text-sm font-semibold text-blue-600 hover:text-blue-700 underline underline-offset-2 transition-colors"
+            style={{ textDecoration: 'underline', color: '#2563eb' }}
+          >
+            Forgot your password?
+          </Link>
+        </div>
+      )}
+
+      <p className="mt-6 text-center text-xs text-slate-400">
         Use the default administrator credentials to access the dashboard experience. Additional roles will be enabled
         soon.
       </p>

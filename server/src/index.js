@@ -18,6 +18,8 @@ const paymentService = require('./services/paymentService');
 const accountingService = require('./services/accountingService');
 const accountingUserService = require('./services/accountingUserService');
 const attendanceService = require('./services/attendanceService');
+const mailboxService = require('./services/mailboxService');
+const passwordResetService = require('./services/passwordResetService');
 const { query } = require('./db');
 const path = require('path');
 const fs = require('fs');
@@ -472,6 +474,104 @@ app.delete('/courses/:id', async (req, res) => {
   } catch (error) {
     console.error('Error deleting course:', error);
     res.status(500).json({ message: 'Failed to delete course' });
+  }
+});
+
+// Course enrollment endpoints
+app.post('/courses/:courseId/enroll', async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const { studentId } = req.body;
+
+    if (!studentId) {
+      return res.status(400).json({ message: 'studentId is required' });
+    }
+
+    // Check if course exists
+    const course = await courseService.getById(courseId);
+    if (!course) {
+      return res.status(404).json({ message: 'Course not found' });
+    }
+
+    // Check if already enrolled
+    const [existing] = await query(
+      'SELECT id FROM course_enrollments WHERE course_id = ? AND student_id = ?',
+      [courseId, studentId]
+    );
+
+    if (existing) {
+      return res.status(409).json({ message: 'Already enrolled in this course' });
+    }
+
+    // Check capacity
+    const enrolledCount = course.enrolled?.length || 0;
+    if (course.capacity && enrolledCount >= course.capacity) {
+      return res.status(400).json({ message: 'Course is at full capacity' });
+    }
+
+    // Enroll student
+    await query(
+      'INSERT INTO course_enrollments (course_id, student_id) VALUES (?, ?)',
+      [courseId, studentId]
+    );
+
+    res.status(201).json({ message: 'Successfully enrolled in course' });
+  } catch (error) {
+    console.error('Error enrolling in course:', error);
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ message: 'Already enrolled in this course' });
+    }
+    res.status(500).json({ message: 'Failed to enroll in course' });
+  }
+});
+
+app.delete('/courses/:courseId/enroll/:studentId', async (req, res) => {
+  try {
+    const { courseId, studentId } = req.params;
+
+    const result = await query(
+      'DELETE FROM course_enrollments WHERE course_id = ? AND student_id = ?',
+      [courseId, studentId]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: 'Enrollment not found' });
+    }
+
+    res.json({ message: 'Successfully unenrolled from course' });
+  } catch (error) {
+    console.error('Error unenrolling from course:', error);
+    res.status(500).json({ message: 'Failed to unenroll from course' });
+  }
+});
+
+app.get('/students/:studentId/courses', async (req, res) => {
+  try {
+    const { studentId } = req.params;
+
+    const enrollments = await query(
+      `SELECT 
+        ce.course_id as courseId, ce.enrolled_at as enrolledAt,
+        c.id, c.title, c.description, c.instructor, c.department,
+        c.start_date as startDate, c.end_date as endDate, c.total_years as totalYears,
+        c.capacity, c.created_at as createdAt, c.updated_at as updatedAt
+      FROM course_enrollments ce
+      JOIN courses c ON ce.course_id = c.id
+      WHERE ce.student_id = ?
+      ORDER BY ce.enrolled_at DESC`,
+      [studentId]
+    );
+
+    // Get tags for each course
+    for (const course of enrollments) {
+      const tags = await query('SELECT tag FROM course_tags WHERE course_id = ?', [course.courseId]);
+      course.tags = tags.map(t => t.tag);
+    }
+
+    res.json(enrollments);
+  } catch (error) {
+    console.error('Error fetching student courses:', error);
+    res.status(500).json({ message: 'Failed to fetch student courses' });
   }
 });
 
@@ -1285,6 +1385,217 @@ app.get('/attendance/all', async (req, res) => {
   } catch (error) {
     console.error('Error fetching all attendance:', error);
     res.status(500).json({ message: 'Failed to fetch attendance' });
+  }
+});
+
+// Mailbox endpoints
+app.get('/mailbox/inbox', async (req, res) => {
+  try {
+    const { userId, userRole } = req.query;
+    if (!userId || !userRole) {
+      return res.status(400).json({ message: 'userId and userRole are required' });
+    }
+    const inbox = await mailboxService.getInbox(userId, userRole);
+    res.json(inbox);
+  } catch (error) {
+    console.error('Error fetching inbox:', error);
+    res.status(500).json({ message: 'Failed to fetch inbox' });
+  }
+});
+
+app.get('/mailbox/messages/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userId } = req.query;
+    if (!userId) {
+      return res.status(400).json({ message: 'userId is required' });
+    }
+    const message = await mailboxService.getMessageById(id, userId);
+    if (!message) {
+      return res.status(404).json({ message: 'Message not found' });
+    }
+    res.json(message);
+  } catch (error) {
+    console.error('Error fetching message:', error);
+    res.status(500).json({ message: 'Failed to fetch message' });
+  }
+});
+
+app.post('/mailbox/send', async (req, res) => {
+  try {
+    const {
+      senderId,
+      senderName,
+      senderRole,
+      recipientId,
+      recipientRole,
+      subject,
+      body,
+      isAnnouncement,
+      announcementAudience,
+    } = req.body;
+
+    if (!senderId || !senderName || !senderRole || !subject || !body) {
+      return res.status(400).json({ message: 'Missing required fields' });
+    }
+
+    if (!isAnnouncement && !recipientId) {
+      return res.status(400).json({ message: 'recipientId is required for personal messages' });
+    }
+
+    if (isAnnouncement && !announcementAudience) {
+      return res.status(400).json({ message: 'announcementAudience is required for announcements' });
+    }
+
+    const message = await mailboxService.sendMessage({
+      senderId,
+      senderName,
+      senderRole,
+      recipientId,
+      recipientRole,
+      subject,
+      body,
+      isAnnouncement: isAnnouncement || false,
+      announcementAudience,
+    });
+
+    res.status(201).json(message);
+  } catch (error) {
+    console.error('Error sending message:', error);
+    res.status(500).json({ message: 'Failed to send message' });
+  }
+});
+
+app.post('/mailbox/messages/:id/read', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userId } = req.body;
+    if (!userId) {
+      return res.status(400).json({ message: 'userId is required' });
+    }
+    await mailboxService.markAsRead(id, userId);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error marking message as read:', error);
+    res.status(500).json({ message: 'Failed to mark message as read' });
+  }
+});
+
+app.post('/mailbox/mark-all-read', async (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) {
+      return res.status(400).json({ message: 'userId is required' });
+    }
+    await mailboxService.markAllAsRead(userId);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error marking all as read:', error);
+    res.status(500).json({ message: 'Failed to mark all as read' });
+  }
+});
+
+app.delete('/mailbox/messages/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userId } = req.query;
+    if (!userId) {
+      return res.status(400).json({ message: 'userId is required' });
+    }
+    const result = await mailboxService.deleteMessage(id, userId);
+    if (!result.success) {
+      return res.status(400).json({ message: result.message });
+    }
+    res.json(result);
+  } catch (error) {
+    console.error('Error deleting message:', error);
+    res.status(500).json({ message: 'Failed to delete message' });
+  }
+});
+
+app.get('/mailbox/sent', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    if (!userId) {
+      return res.status(400).json({ message: 'userId is required' });
+    }
+    const messages = await mailboxService.getSentMessages(userId);
+    res.json(messages);
+  } catch (error) {
+    console.error('Error fetching sent messages:', error);
+    res.status(500).json({ message: 'Failed to fetch sent messages' });
+  }
+});
+
+app.get('/mailbox/unread-count', async (req, res) => {
+  try {
+    const { userId, userRole } = req.query;
+    if (!userId || !userRole) {
+      return res.status(400).json({ message: 'userId and userRole are required' });
+    }
+    const count = await mailboxService.getUnreadCount(userId, userRole);
+    res.json(count);
+  } catch (error) {
+    console.error('Error fetching unread count:', error);
+    res.status(500).json({ message: 'Failed to fetch unread count' });
+  }
+});
+
+// Password Reset endpoints
+app.post('/auth/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required' });
+    }
+
+    const result = await passwordResetService.requestPasswordReset(email);
+    res.json(result);
+  } catch (error) {
+    console.error('Error requesting password reset:', error);
+    res.status(500).json({ message: 'Failed to process password reset request' });
+  }
+});
+
+app.post('/auth/reset-password', async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+    if (!token || !newPassword) {
+      return res.status(400).json({ message: 'Token and new password are required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters long' });
+    }
+
+    const result = await passwordResetService.resetPassword(token, newPassword);
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error resetting password:', error);
+    res.status(500).json({ message: 'Failed to reset password' });
+  }
+});
+
+app.get('/auth/verify-reset-token', async (req, res) => {
+  try {
+    const { token } = req.query;
+    if (!token) {
+      return res.status(400).json({ message: 'Token is required' });
+    }
+
+    const result = await passwordResetService.verifyResetToken(token);
+    if (!result.valid) {
+      return res.status(400).json(result);
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error verifying reset token:', error);
+    res.status(500).json({ message: 'Failed to verify token' });
   }
 });
 

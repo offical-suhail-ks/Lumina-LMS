@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useSelector } from 'react-redux';
-import { getCourseDetails } from '../../services/courseService';
+import { getCourseDetails, enrollInCourse, unenrollFromCourse } from '../../services/courseService';
 import { listAssignments } from '../../services/assignmentService';
 
 const CourseDetails = () => {
@@ -11,6 +11,8 @@ const CourseDetails = () => {
   const [assignments, setAssignments] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isEnrolled, setIsEnrolled] = useState(false);
+  const [enrolling, setEnrolling] = useState(false);
 
   const timeline = useMemo(() => {
     if (!course) return [];
@@ -34,6 +36,11 @@ const CourseDetails = () => {
         ]);
         setCourse(courseData);
         setAssignments(assignmentData.filter(item => item.courseId === id));
+        
+        // Check if student is enrolled
+        if (user?.role === 'student' && courseData.enrolled && Array.isArray(courseData.enrolled)) {
+          setIsEnrolled(courseData.enrolled.includes(user.id));
+        }
       } catch (error) {
         console.error(error);
         setError('Unable to load course details.');
@@ -70,7 +77,7 @@ const CourseDetails = () => {
                 Facilitated by {course.instructor}
               </span>
               <span className="rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-600">
-                Capacity {course.capacity}
+                {course.enrolled?.length || 0} / {course.capacity} enrolled
               </span>
               {course.totalYears && (
                 <span className="rounded-full bg-emerald-50 px-3 py-1 font-semibold text-emerald-600">
@@ -85,12 +92,64 @@ const CourseDetails = () => {
             </div>
           </div>
           {user?.role === 'student' && (
-            <Link
-              to={`/students/course-modules/${id}`}
-              className="rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
-            >
-              View Modules
-            </Link>
+            <div className="flex gap-2">
+              {isEnrolled ? (
+                <>
+                  <Link
+                    to={`/students/course-modules/${id}`}
+                    className="rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+                  >
+                    View Modules
+                  </Link>
+                  <button
+                    onClick={async () => {
+                      if (window.confirm('Are you sure you want to unenroll from this course?')) {
+                        try {
+                          setEnrolling(true);
+                          await unenrollFromCourse(id, user.id);
+                          setIsEnrolled(false);
+                          // Reload course to update enrollment count
+                          const courseData = await getCourseDetails(id);
+                          setCourse(courseData);
+                        } catch (error) {
+                          console.error('Error unenrolling:', error);
+                          alert('Failed to unenroll. Please try again.');
+                        } finally {
+                          setEnrolling(false);
+                        }
+                      }
+                    }}
+                    disabled={enrolling}
+                    className="rounded-2xl border border-red-300 bg-red-50 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-100 disabled:opacity-50"
+                  >
+                    {enrolling ? 'Unenrolling...' : 'Unenroll'}
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={async () => {
+                    try {
+                      setEnrolling(true);
+                      await enrollInCourse(id, user.id);
+                      setIsEnrolled(true);
+                      // Reload course to update enrollment count
+                      const courseData = await getCourseDetails(id);
+                      setCourse(courseData);
+                    } catch (error) {
+                      console.error('Error enrolling:', error);
+                      const message = error.response?.data?.message || 'Failed to enroll. Please try again.';
+                      alert(message);
+                    } finally {
+                      setEnrolling(false);
+                    }
+                  }}
+                  disabled={enrolling}
+                  className="rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {enrolling ? 'Enrolling...' : 'Enroll in Course'}
+                </button>
+              )}
+            </div>
           )}
         </div>
         {Array.isArray(course.tags) && course.tags.length > 0 ? (

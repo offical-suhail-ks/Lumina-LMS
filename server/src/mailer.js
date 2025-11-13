@@ -601,9 +601,131 @@ async function sendPaymentReminder(student, paymentSummary) {
   }
 }
 
+async function sendPasswordResetEmail(email, name, resetToken) {
+  if (!email) return;
+
+  const resetUrl = `${frontendUrl}/reset-password?token=${resetToken}`;
+  const userName = name || 'User';
+
+  const message = {
+    from: defaultFrom,
+    to: email,
+    subject: '🔐 Password Reset Request - Lumina LMS',
+    text: [
+      `Hi ${userName},`,
+      '',
+      'We received a request to reset your password for your Lumina LMS account.',
+      '',
+      'To reset your password, please click on the following link:',
+      resetUrl,
+      '',
+      'This link will expire in 1 hour for security reasons.',
+      '',
+      'If you did not request a password reset, please ignore this email. Your password will remain unchanged.',
+      '',
+      'For security reasons, never share this link with anyone.',
+      '',
+      'Best regards,',
+      'Lumina LMS Security Team',
+    ].join('\n'),
+    html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      </head>
+      <body style="margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; background-color: #f4f7fc;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #f4f7fc;">
+          <tr>
+            <td align="center" style="padding: 40px 20px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="background-color: #ffffff; border-radius: 16px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+                <!-- Header -->
+                <tr>
+                  <td style="padding: 40px 40px 20px; text-align: center; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); border-radius: 16px 16px 0 0;">
+                    <div style="display: inline-block; width: 80px; height: 80px; background-color: rgba(255, 255, 255, 0.2); border-radius: 50%; line-height: 80px; font-size: 36px; font-weight: bold; color: #ffffff; margin-bottom: 16px;">
+                      🔐
+                    </div>
+                    <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 600;">Password Reset</h1>
+                    <p style="margin: 12px 0 0; color: rgba(255, 255, 255, 0.9); font-size: 16px;">Reset Your Account Password</p>
+                  </td>
+                </tr>
+                
+                <!-- Main Content -->
+                <tr>
+                  <td style="padding: 40px;">
+                    <p style="margin: 0 0 20px; font-size: 16px; color: #0f172a; line-height: 1.6;">
+                      Hi <strong>${userName}</strong>,
+                    </p>
+                    
+                    <p style="margin: 0 0 24px; font-size: 15px; color: #475569; line-height: 1.6;">
+                      We received a request to reset your password for your Lumina LMS account. Click the button below to create a new password.
+                    </p>
+
+                    <!-- Reset Button -->
+                    <div style="text-align: center; margin: 32px 0;">
+                      <a href="${resetUrl}" style="display: inline-block; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 12px; font-weight: 600; font-size: 15px; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);">
+                        🔑 Reset Password
+                      </a>
+                    </div>
+
+                    <p style="margin: 24px 0 0; font-size: 13px; color: #64748b; line-height: 1.6; text-align: center;">
+                      Or copy and paste this link into your browser:<br>
+                      <a href="${resetUrl}" style="color: #6366f1; word-break: break-all;">${resetUrl}</a>
+                    </p>
+
+                    <!-- Security Notice -->
+                    <div style="margin: 32px 0; padding: 20px; background-color: #fef2f2; border-radius: 12px; border-left: 4px solid #ef4444;">
+                      <p style="margin: 0 0 8px; font-size: 14px; font-weight: 600; color: #991b1b;">⚠️ Security Notice:</p>
+                      <ul style="margin: 0; padding-left: 20px; color: #7f1d1d; font-size: 13px; line-height: 1.8;">
+                        <li>This link will expire in <strong>1 hour</strong> for security reasons</li>
+                        <li>If you did not request a password reset, please ignore this email</li>
+                        <li>Never share this link with anyone</li>
+                        <li>Your password will remain unchanged if you don't click the link</li>
+                      </ul>
+                    </div>
+
+                    <p style="margin: 24px 0 0; font-size: 14px; color: #64748b; line-height: 1.6;">
+                      If you continue to have problems, please contact our support team.
+                    </p>
+                  </td>
+                </tr>
+
+                <!-- Footer -->
+                <tr>
+                  <td style="padding: 32px 40px; background-color: #f8fafc; border-radius: 0 0 16px 16px; text-align: center;">
+                    <p style="margin: 0 0 16px; font-size: 14px; color: #64748b;">
+                      Best regards,<br>
+                      <strong>Lumina LMS Security Team</strong>
+                    </p>
+                    <div style="margin: 20px 0;">
+                      <img src="https://via.placeholder.com/200x40/6366f1/ffffff?text=Lumina+LMS" alt="Lumina LMS" style="max-width: 200px; height: auto;" />
+                    </div>
+                    <p style="margin: 16px 0 0; font-size: 12px; color: #94a3b8;">
+                      © ${new Date().getFullYear()} Lumina LMS. All rights reserved.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `,
+  };
+
+  const info = await transporter.sendMail(message);
+
+  if (info.message) {
+    console.log('Password reset email preview (stream transport):\n', info.message.toString());
+  }
+}
+
 module.exports = {
   sendStudentWelcomeEmail,
   sendStudentOfferLetter,
   sendPaymentReminder,
+  sendPasswordResetEmail,
 };
 
