@@ -55,7 +55,20 @@ import AccountingSalaries from '../pages/accounting/AccountingSalaries';
 import ManageAccounting from '../pages/admin/ManageAccounting';
 import ReviewApplications from '../pages/admin/ReviewApplications';
 import ViewAttendance from '../pages/admin/ViewAttendance';
+import ActivityLogs from '../pages/admin/ActivityLogs';
+import ManageFeatureFlags from '../pages/admin/ManageFeatureFlags';
 import TakeAttendance from '../pages/faculty/TakeAttendance';
+import QuizList from '../pages/quizzes/QuizList';
+import QuizDetail from '../pages/quizzes/QuizDetail';
+import ForumList from '../pages/forum/ForumList';
+import AnalyticsDashboard from '../pages/analytics/AnalyticsDashboard';
+import CertificateList from '../pages/certificates/CertificateList';
+import VideoLibrary from '../pages/videos/VideoLibrary';
+import UploadVideo from '../pages/videos/UploadVideo';
+import AchievementList from '../pages/achievements/AchievementList';
+import CreateForum from '../pages/forum/CreateForum';
+import CreateQuiz from '../pages/quizzes/CreateQuiz';
+import CreateCertificate from '../pages/certificates/CreateCertificate';
 
 const AppRoutes = () => {
   const dispatch = useDispatch();
@@ -215,6 +228,14 @@ const AppRoutes = () => {
               element={user?.role === 'admin' ? <ViewAttendance /> : <Navigate to="/dashboard" replace />}
             />
             <Route
+              path="admin/activity-logs"
+              element={user?.role === 'admin' ? <ActivityLogs /> : <Navigate to="/dashboard" replace />}
+            />
+            <Route
+              path="admin/feature-flags"
+              element={user?.role === 'admin' ? <ManageFeatureFlags /> : <Navigate to="/dashboard" replace />}
+            />
+            <Route
               path="faculty/attendance"
               element={user?.role === 'faculty' ? <TakeAttendance /> : <Navigate to="/dashboard" replace />}
             />
@@ -229,6 +250,45 @@ const AppRoutes = () => {
             <Route
               path="accounting/fees"
               element={user?.role === 'accounting' ? <ManageFees /> : <Navigate to="/dashboard" replace />}
+            />
+            <Route path="quizzes" element={<QuizList />} />
+            <Route path="quizzes/:id" element={<QuizDetail />} />
+            <Route path="forum" element={<ForumList />} />
+            <Route path="analytics" element={<AnalyticsDashboard />} />
+            <Route path="certificates" element={<CertificateList />} />
+            <Route path="videos" element={<VideoLibrary />} />
+            <Route
+              path="videos/upload"
+              element={(user?.role === 'admin' || user?.role === 'faculty') ? <UploadVideo /> : <Navigate to="/dashboard" replace />}
+            />
+            <Route
+              path="achievements"
+              element={user?.role === 'student' ? <AchievementList /> : <Navigate to="/dashboard" replace />}
+            />
+            <Route path="forum/create" element={<CreateForum />} />
+            <Route
+              path="quizzes/create"
+              element={(user?.role === 'admin' || user?.role === 'faculty') ? <CreateQuiz /> : <Navigate to="/dashboard" replace />}
+            />
+            <Route
+              path="certificates/create"
+              element={(user?.role === 'admin' || user?.role === 'faculty') ? <CreateCertificate /> : <Navigate to="/dashboard" replace />}
+            />
+            <Route
+              path="admin/quizzes"
+              element={user?.role === 'admin' ? <QuizList /> : <Navigate to="/dashboard" replace />}
+            />
+            <Route
+              path="admin/analytics"
+              element={user?.role === 'admin' ? <AnalyticsDashboard /> : <Navigate to="/dashboard" replace />}
+            />
+            <Route
+              path="faculty/quizzes"
+              element={user?.role === 'faculty' ? <QuizList /> : <Navigate to="/dashboard" replace />}
+            />
+            <Route
+              path="faculty/forum"
+              element={user?.role === 'faculty' ? <ForumList /> : <Navigate to="/dashboard" replace />}
             />
       </Route>
 

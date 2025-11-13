@@ -1,144 +1,335 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import { NavLink, useLocation } from 'react-router-dom';
+import { toggleTheme } from '../store/themeSlice';
+import OnboardingTourButton from './OnboardingTourButton';
+import {
+  DashboardIcon, CoursesIcon, AssignmentsIcon, QuizIcon, ForumIcon, VideoIcon,
+  AnalyticsIcon, CertificateIcon, AchievementIcon, CalendarIcon, MailIcon, ProfileIcon,
+  BuilderIcon, DocumentIcon, UploadIcon, PlusIcon, CheckIcon, UsersIcon, TeacherIcon,
+  MoneyIcon, EditIcon, SendIcon, ScrollIcon, SettingsIcon, ClipboardIcon, DollarIcon,
+  LearningIcon, CommunicationIcon, ToolsIcon, ManagementIcon,
+} from './Icons';
 
-const baseLinks = [
-  { to: '/dashboard', label: 'Overview', description: 'Live metrics and focus areas' },
-  { to: '/courses', label: 'Courses', description: 'Content, progress and grades' },
-  { to: '/assignments', label: 'Assignments', description: 'Deliverables and feedback' },
-  { to: '/calendar', label: 'Calendar', description: 'Events and milestones' },
-  { to: '/mailbox', label: 'Mailbox', description: 'Messages and announcements' },
-  { to: '/profile', label: 'Profile', description: 'Personal preferences' },
+// Priority 1: Core Navigation (Always visible)
+const coreLinks = [
+  { to: '/dashboard', label: 'Overview', Icon: DashboardIcon, priority: 1 },
+  { to: '/courses', label: 'Courses', Icon: CoursesIcon, priority: 1 },
+  { to: '/assignments', label: 'Assignments', Icon: AssignmentsIcon, priority: 1 },
 ];
 
-const studentBaseLinks = [
-  { to: '/dashboard', label: 'Overview', description: 'Live metrics and focus areas' },
-  { to: '/courses', label: 'Courses', description: 'Content, progress and grades' },
-  { to: '/assignments', label: 'Assignments', description: 'Deliverables and feedback' },
-  { to: '/calendar', label: 'Calendar', description: 'Events and milestones' },
-  { to: '/mailbox', label: 'Mailbox', description: 'Messages and announcements' },
-  { to: '/fees', label: 'Fees', description: 'Payment and fee management' },
-  { to: '/profile', label: 'Profile', description: 'Personal preferences' },
+// Priority 2: Learning Tools (Collapsible)
+const learningTools = [
+  { to: '/quizzes', label: 'Quizzes & Exams', Icon: QuizIcon, priority: 2 },
+  { to: '/forum', label: 'Discussion Forum', Icon: ForumIcon, priority: 2 },
+  { to: '/videos', label: 'Video Library', Icon: VideoIcon, priority: 2 },
+  { to: '/analytics', label: 'Analytics', Icon: AnalyticsIcon, priority: 2 },
 ];
 
-const userCreationLinks = [
-  { to: '/admin/students', label: 'Students', description: 'Provision and edit accounts' },
-  { to: '/admin/faculty', label: 'Faculty', description: 'Create and manage faculty users' },
-  { to: '/admin/accounting', label: 'Accounting Team', description: 'Create and manage accounting users' },
+// Priority 3: Achievements & Certificates (Collapsible)
+const achievementsLinks = [
+  { to: '/certificates', label: 'Certificates', Icon: CertificateIcon, priority: 3 },
+  { to: '/achievements', label: 'Achievements', Icon: AchievementIcon, priority: 3 },
 ];
 
-const adminLinks = [
-  { to: '/admin/review-applications', label: 'Review Applications', description: 'Review and approve student applications' },
-  { to: '/admin/attendance', label: 'View Attendance', description: 'View all student attendance records' },
-  { to: '/admin/courses', label: 'Course builder', description: 'Design and refine programmes' },
-  { to: '/admin/assignments', label: 'Assignments studio', description: 'Briefs, due dates, submissions' },
+// Priority 4: Communication (Collapsible)
+const communicationLinks = [
+  { to: '/calendar', label: 'Calendar', Icon: CalendarIcon, priority: 4 },
+  { to: '/mailbox', label: 'Mailbox', Icon: MailIcon, priority: 4 },
 ];
 
-const accountingFeeLinks = [
-  { to: '/accounting/tasks', label: 'View Forwarded Tasks', description: 'View and manage tasks forwarded from admin' },
-  { to: '/accounting/tasks?status=pending', label: 'Pending Tasks', description: 'Tasks awaiting fee setup' },
-  { to: '/accounting/tasks?status=in_progress', label: 'In Progress', description: 'Tasks currently being processed' },
+// Priority 5: Settings
+const settingsLinks = [
+  { to: '/profile', label: 'Profile', Icon: ProfileIcon, priority: 5 },
 ];
 
-const accountingLinks = [
-  { to: '/accounting/fees', label: 'Fee Management', description: 'View and manage all student fees' },
-  { to: '/accounting/salaries', label: 'Salaries', description: 'Manage employee salaries' },
+// Admin/Faculty specific links
+const adminTools = [
+  { to: '/admin/courses', label: 'Course Builder', Icon: BuilderIcon, priority: 2 },
+  { to: '/admin/assignments', label: 'Assignments Studio', Icon: DocumentIcon, priority: 2 },
+  { to: '/admin/quizzes', label: 'Quiz Manager', Icon: QuizIcon, priority: 2 },
+  { to: '/videos/upload', label: 'Upload Videos', Icon: UploadIcon, priority: 2 },
+  { to: '/forum/create', label: 'Create Forum', Icon: PlusIcon, priority: 2 },
+  { to: '/quizzes/create', label: 'Create Quiz', Icon: PlusIcon, priority: 2 },
+  { to: '/certificates/create', label: 'Create Certificate', Icon: CertificateIcon, priority: 3 },
 ];
 
-const facultyLinks = [
-  { to: '/faculty/my-courses', label: 'My Courses', description: 'View your assigned courses' },
-  { to: '/faculty/grade-submissions', label: 'Grade Submissions', description: 'Review and grade assignments' },
-  { to: '/faculty/attendance', label: 'Take Attendance', description: 'Mark student attendance' },
-  { to: '/faculty/student-roster', label: 'Student Roster', description: 'View enrolled students' },
-  { to: '/faculty/create-assignment', label: 'Create Assignment', description: 'Add new assignments' },
+const adminManagement = [
+  { to: '/admin/review-applications', label: 'Review Applications', Icon: CheckIcon, priority: 3 },
+  { to: '/admin/attendance', label: 'View Attendance', Icon: AnalyticsIcon, priority: 3 },
+  { to: '/admin/analytics', label: 'System Analytics', Icon: AnalyticsIcon, priority: 3 },
+  { to: '/admin/activity-logs', label: 'Activity Logs', Icon: ClipboardIcon, priority: 3 },
+  { to: '/admin/feature-flags', label: 'Feature Management', Icon: SettingsIcon, priority: 3 },
 ];
 
-const studentLinks = [
-  { to: '/students/view-grades', label: 'My Grades', description: 'View grades and feedback' },
-  { to: '/students/my-submissions', label: 'My Submissions', description: 'Track assignment submissions' },
-  { to: '/students/transcript', label: 'Transcript', description: 'Academic transcript' },
-  { to: '/students/course-progress', label: 'Course Progress', description: 'Track course completion' },
-  { to: '/students/study-schedule', label: 'Study Schedule', description: 'Weekly schedule planner' },
-  { to: '/students/resources', label: 'Resources', description: 'Course materials library' },
+const userManagement = [
+  { to: '/admin/students', label: 'Students', Icon: UsersIcon, priority: 4 },
+  { to: '/admin/faculty', label: 'Faculty', Icon: TeacherIcon, priority: 4 },
+  { to: '/admin/accounting', label: 'Accounting Team', Icon: MoneyIcon, priority: 4 },
 ];
 
-const Sidebar = () => {
+const facultyTools = [
+  { to: '/faculty/my-courses', label: 'My Courses', Icon: CoursesIcon, priority: 2 },
+  { to: '/faculty/grade-submissions', label: 'Grade Submissions', Icon: EditIcon, priority: 2 },
+  { to: '/faculty/quizzes', label: 'Manage Quizzes', Icon: QuizIcon, priority: 2 },
+  { to: '/videos/upload', label: 'Upload Videos', Icon: UploadIcon, priority: 2 },
+  { to: '/forum/create', label: 'Create Forum', Icon: PlusIcon, priority: 2 },
+  { to: '/quizzes/create', label: 'Create Quiz', Icon: PlusIcon, priority: 2 },
+  { to: '/certificates/create', label: 'Create Certificate', Icon: CertificateIcon, priority: 3 },
+  { to: '/faculty/attendance', label: 'Take Attendance', Icon: AnalyticsIcon, priority: 3 },
+  { to: '/faculty/student-roster', label: 'Student Roster', Icon: UsersIcon, priority: 3 },
+  { to: '/faculty/create-assignment', label: 'Create Assignment', Icon: DocumentIcon, priority: 3 },
+];
+
+const studentTools = [
+  { to: '/students/view-grades', label: 'My Grades', Icon: AnalyticsIcon, priority: 3 },
+  { to: '/students/my-submissions', label: 'My Submissions', Icon: SendIcon, priority: 3 },
+  { to: '/students/transcript', label: 'Transcript', Icon: ScrollIcon, priority: 3 },
+  { to: '/students/course-progress', label: 'Course Progress', Icon: AnalyticsIcon, priority: 3 },
+  { to: '/students/study-schedule', label: 'Study Schedule', Icon: CalendarIcon, priority: 4 },
+  { to: '/students/resources', label: 'Resources', Icon: CoursesIcon, priority: 4 },
+  { to: '/fees', label: 'Fees', Icon: MoneyIcon, priority: 4 },
+];
+
+const accountingTools = [
+  { to: '/accounting/fees', label: 'Fee Management', Icon: MoneyIcon, priority: 2 },
+  { to: '/accounting/salaries', label: 'Salaries', Icon: DollarIcon, priority: 2 },
+  { to: '/accounting/tasks', label: 'View Tasks', Icon: ClipboardIcon, priority: 2 },
+];
+
+const Sidebar = ({ onLaunchTour }) => {
+  const dispatch = useDispatch();
   const role = useSelector(state => state.auth.user?.role);
+  const theme = useSelector(state => state.theme.mode);
   const location = useLocation();
-  const [isUserCreationOpen, setIsUserCreationOpen] = useState(() => {
-    // Check if current path is one of the user creation links
-    return userCreationLinks.some(link => location.pathname === link.to);
+  
+  const [openSections, setOpenSections] = useState({
+    learning: true,
+    achievements: false,
+    communication: false,
+    adminTools: false,
+    adminManagement: false,
+    userManagement: false,
+    facultyTools: false,
+    studentTools: false,
+    accountingTools: false,
   });
-  const [isFeeManagementOpen, setIsFeeManagementOpen] = useState(() => {
-    // Check if current path is one of the fee management links
-    return accountingFeeLinks.some(link => {
-      const path = link.to.split('?')[0]; // Remove query params for comparison
-      return location.pathname === path || location.pathname.startsWith(path);
-    });
-  });
-  const [openAll, setOpenAll] = useState(false);
 
-  // Auto-open dropdown when on a user creation page
   useEffect(() => {
-    if (role === 'admin' && userCreationLinks.some(link => location.pathname === link.to)) {
-      setIsUserCreationOpen(true);
-    }
-    if (role === 'accounting') {
-      const isOnFeePage = accountingFeeLinks.some(link => {
-        const path = link.to.split('?')[0];
-        return location.pathname === path || location.pathname.startsWith(path);
-      });
-      if (isOnFeePage) {
-        setIsFeeManagementOpen(true);
-      }
-    }
-  }, [location.pathname, role]);
-
-  // When "open all" is enabled, keep all sections open
-  useEffect(() => {
-    if (openAll) {
-      if (role === 'admin') {
-        setIsUserCreationOpen(true);
-      }
-      if (role === 'accounting') {
-        setIsFeeManagementOpen(true);
-      }
+    // Initialize theme
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
     } else {
-      if (role === 'admin') {
-        // When disabling "open all", check if we're on a user creation page
-        const isOnUserCreationPage = userCreationLinks.some(link => location.pathname === link.to);
-        if (!isOnUserCreationPage) {
-          setIsUserCreationOpen(false);
-        }
-      }
-      if (role === 'accounting') {
-        // When disabling "open all", check if we're on a fee management page
-        const isOnFeePage = accountingFeeLinks.some(link => {
-          const path = link.to.split('?')[0];
-          return location.pathname === path || location.pathname.startsWith(path);
-        });
-        if (!isOnFeePage) {
-          setIsFeeManagementOpen(false);
-        }
-      }
+      document.documentElement.classList.remove('dark');
     }
-  }, [openAll, role, location.pathname]);
+  }, [theme]);
 
-  const links = useMemo(() => {
+  const toggleSection = (section) => {
+    setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  const CollapsibleSection = ({ title, items, sectionKey, Icon }) => {
+    const isOpen = openSections[sectionKey];
+    const hasActiveItem = items.some(item => location.pathname === item.to || location.pathname.startsWith(item.to));
+
+    return (
+      <div className="mb-2">
+        <button
+          type="button"
+          onClick={() => toggleSection(sectionKey)}
+          className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all ${
+            hasActiveItem || isOpen
+              ? 'bg-white/10 border border-white/20'
+              : 'hover:bg-white/5 border border-transparent'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {Icon && <Icon className="h-5 w-5 text-white" />}
+            <span className="text-sm font-semibold text-white">{title}</span>
+          </div>
+          <svg
+            className={`h-4 w-4 text-white/60 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        {isOpen && (
+          <div className="mt-2 ml-4 space-y-1 border-l-2 border-white/10 pl-4">
+            {items.map(item => {
+              const ItemIcon = item.Icon;
+              return (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  className={({ isActive }) =>
+                    `flex items-center px-3 py-2 rounded-lg text-sm transition ${
+                      isActive
+                        ? 'bg-white/10 text-white font-medium'
+                        : 'text-white/70 hover:text-white hover:bg-white/5'
+                    }`
+                  }
+                >
+                  {ItemIcon && <ItemIcon className="h-4 w-4 mr-2" />}
+                  {item.label}
+                </NavLink>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderLinks = () => {
+    const links = [];
+
+    // Core links (always visible)
+    coreLinks.forEach(link => {
+      const LinkIcon = link.Icon;
+      links.push(
+        <NavLink
+          key={link.to}
+          to={link.to}
+          className={({ isActive }) =>
+            `flex items-center px-4 py-3 rounded-xl mb-2 transition ${
+              isActive
+                ? 'bg-white/10 border border-white/20 text-white'
+                : 'hover:bg-white/5 border border-transparent text-white/80'
+            }`
+          }
+        >
+          {LinkIcon && <LinkIcon className="h-5 w-5 mr-2" />}
+          <span className="text-sm font-semibold">{link.label}</span>
+        </NavLink>
+      );
+    });
+
+    // Learning Tools (collapsible)
+    if (role === 'student' || role === 'admin' || role === 'faculty') {
+      links.push(
+        <CollapsibleSection
+          key="learning"
+          title="Learning Tools"
+          items={learningTools}
+          sectionKey="learning"
+          Icon={LearningIcon}
+        />
+      );
+    }
+
+    // Role-specific tools
     if (role === 'admin') {
-      return [...baseLinks, { type: 'divider' }, ...adminLinks];
+      links.push(
+        <CollapsibleSection
+          key="adminTools"
+          title="Content Management"
+          items={adminTools}
+          sectionKey="adminTools"
+          Icon={ToolsIcon}
+        />
+      );
+      links.push(
+        <CollapsibleSection
+          key="adminManagement"
+          title="Administration"
+          items={adminManagement}
+          sectionKey="adminManagement"
+          Icon={ManagementIcon}
+        />
+      );
+      links.push(
+        <CollapsibleSection
+          key="userManagement"
+          title="User Management"
+          items={userManagement}
+          sectionKey="userManagement"
+          Icon={UsersIcon}
+        />
+      );
     }
-    if (role === 'accounting') {
-      return [...baseLinks, { type: 'divider' }, ...accountingLinks];
-    }
+
     if (role === 'faculty') {
-      return [...baseLinks, { type: 'divider' }, ...facultyLinks];
+      links.push(
+        <CollapsibleSection
+          key="facultyTools"
+          title="Faculty Tools"
+          items={facultyTools}
+          sectionKey="facultyTools"
+          Icon={TeacherIcon}
+        />
+      );
     }
+
     if (role === 'student') {
-      return [...studentBaseLinks, { type: 'divider' }, ...studentLinks];
+      links.push(
+        <CollapsibleSection
+          key="achievements"
+          title="Achievements"
+          items={achievementsLinks}
+          sectionKey="achievements"
+          Icon={AchievementIcon}
+        />
+      );
+      links.push(
+        <CollapsibleSection
+          key="studentTools"
+          title="Student Tools"
+          items={studentTools}
+          sectionKey="studentTools"
+          Icon={CoursesIcon}
+        />
+      );
     }
-    return baseLinks;
-  }, [role]);
+
+    if (role === 'accounting') {
+      links.push(
+        <CollapsibleSection
+          key="accountingTools"
+          title="Accounting Tools"
+          items={accountingTools}
+          sectionKey="accountingTools"
+          Icon={MoneyIcon}
+        />
+      );
+    }
+
+    // Communication (collapsible)
+    links.push(
+      <CollapsibleSection
+        key="communication"
+        title="Communication"
+        items={communicationLinks}
+        sectionKey="communication"
+        Icon={CommunicationIcon}
+      />
+    );
+
+    // Settings (always visible)
+    settingsLinks.forEach(link => {
+      const LinkIcon = link.Icon;
+      links.push(
+        <NavLink
+          key={link.to}
+          to={link.to}
+          className={({ isActive }) =>
+            `flex items-center px-4 py-3 rounded-xl mb-2 transition ${
+              isActive
+                ? 'bg-white/10 border border-white/20 text-white'
+                : 'hover:bg-white/5 border border-transparent text-white/80'
+            }`
+          }
+        >
+          {LinkIcon && <LinkIcon className="h-5 w-5 mr-2" />}
+          <span className="text-sm font-semibold">{link.label}</span>
+        </NavLink>
+      );
+    });
+
+    return links;
+  };
 
   return (
     <aside className="hidden w-80 flex-shrink-0 border-r border-white/10 bg-slate-950/80 px-6 py-8 backdrop-blur-2xl lg:flex">
@@ -151,214 +342,32 @@ const Sidebar = () => {
             <p className="text-lg font-semibold text-white">Lumina LMS</p>
             <p className="text-xs text-white/60">Learning intelligence, simplified</p>
           </div>
-          {(role === 'admin' || role === 'accounting') && (
-            <button
-              type="button"
-              onClick={() => {
-                setOpenAll(!openAll);
-                if (!openAll) {
-                  if (role === 'admin') {
-                    setIsUserCreationOpen(true);
-                  }
-                  if (role === 'accounting') {
-                    setIsFeeManagementOpen(true);
-                  }
-                }
-              }}
-              className="rounded-xl border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/20"
-              title={openAll ? 'Collapse all sections' : 'Expand all sections'}
-            >
-              {openAll ? (
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                </svg>
-              ) : (
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              )}
-            </button>
-          )}
-        </div>
-
-        <nav className="flex-1 space-y-3">
-          {links.map(link =>
-            link.type === 'divider' ? (
-              <div key={`${role}-divider`} className="pt-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/40">
-                  {role === 'admin' ? 'Admin Console' : 
-                   role === 'accounting' ? 'Accounting Tools' :
-                   role === 'faculty' ? 'Faculty Tools' : 
-                   role === 'student' ? 'Student Tools' : ''}
-                </p>
-                {role === 'accounting' && (
-                  <div className="mt-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!openAll) {
-                          setIsFeeManagementOpen(!isFeeManagementOpen);
-                        }
-                      }}
-                      disabled={openAll}
-                      className={`group w-full rounded-2xl border border-transparent px-4 py-3 transition-all duration-200 ${
-                        (isFeeManagementOpen || openAll || accountingFeeLinks.some(l => {
-                          const path = l.to.split('?')[0];
-                          return location.pathname === path || location.pathname.startsWith(path);
-                        }))
-                          ? 'border-white/20 bg-white/10 shadow-lg shadow-indigo-500/10'
-                          : 'hover:border-white/10 hover:bg-white/5 hover:shadow-md hover:shadow-indigo-500/5'
-                      } ${openAll ? 'cursor-default' : 'cursor-pointer'}`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="text-left">
-                          <p className="text-sm font-semibold text-white">Fee Management</p>
-                          <p className="text-xs text-white/60">View and manage forwarded tasks</p>
-                        </div>
-                        <svg
-                          className={`h-4 w-4 text-white/60 transition-transform ${(isFeeManagementOpen || openAll) ? 'rotate-180' : ''}`}
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </div>
-                    </button>
-                    {(isFeeManagementOpen || openAll) && (
-                      <div className="mt-2 ml-4 space-y-2 border-l-2 border-white/10 pl-4">
-                        {accountingFeeLinks.map(feeLink => (
-                          <NavLink
-                            key={feeLink.to}
-                            to={feeLink.to}
-                            className={({ isActive }) =>
-                              [
-                                'group block rounded-xl border border-transparent px-3 py-2 transition-all duration-200',
-                                isActive
-                                  ? 'border-white/20 bg-white/10 shadow-md shadow-indigo-500/10'
-                                  : 'hover:border-white/10 hover:bg-white/5',
-                              ].join(' ')
-                            }
-                          >
-                            {({ isActive }) => (
-                              <>
-                                <p className={`text-xs font-semibold ${isActive ? 'text-white' : 'text-white/80'}`}>
-                                  {feeLink.label}
-                                </p>
-                                <p className="text-xs text-white/50">{feeLink.description}</p>
-                              </>
-                            )}
-                          </NavLink>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-                {role === 'admin' && (
-                  <div className="mt-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!openAll) {
-                          setIsUserCreationOpen(!isUserCreationOpen);
-                        }
-                      }}
-                      disabled={openAll}
-                      className={`group w-full rounded-2xl border border-transparent px-4 py-3 transition-all duration-200 ${
-                        (isUserCreationOpen || openAll || userCreationLinks.some(l => location.pathname === l.to))
-                          ? 'border-white/20 bg-white/10 shadow-lg shadow-indigo-500/10'
-                          : 'hover:border-white/10 hover:bg-white/5 hover:shadow-md hover:shadow-indigo-500/5'
-                      } ${openAll ? 'cursor-default' : 'cursor-pointer'}`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="text-left">
-                          <p className="text-sm font-semibold text-white">User Creation</p>
-                          <p className="text-xs text-white/60">Manage users and accounts</p>
-                        </div>
-                        <svg
-                          className={`h-4 w-4 text-white/60 transition-transform ${(isUserCreationOpen || openAll) ? 'rotate-180' : ''}`}
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </div>
-                    </button>
-                    {(isUserCreationOpen || openAll) && (
-                      <div className="mt-2 ml-4 space-y-2 border-l-2 border-white/10 pl-4">
-                        {userCreationLinks.map(userLink => (
-                          <NavLink
-                            key={userLink.to}
-                            to={userLink.to}
-                            className={({ isActive }) =>
-                              [
-                                'group block rounded-xl border border-transparent px-3 py-2 transition-all duration-200',
-                                isActive
-                                  ? 'border-white/20 bg-white/10 shadow-md shadow-indigo-500/10'
-                                  : 'hover:border-white/10 hover:bg-white/5',
-                              ].join(' ')
-                            }
-                          >
-                            {({ isActive }) => (
-                              <>
-                                <p className={`text-xs font-semibold ${isActive ? 'text-white' : 'text-white/80'}`}>
-                                  {userLink.label}
-                                </p>
-                                <p className="text-xs text-white/50">{userLink.description}</p>
-                              </>
-                            )}
-                          </NavLink>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <NavLink
-                key={link.to}
-                to={link.to}
-                className={({ isActive }) =>
-                  [
-                    'group block rounded-2xl border border-transparent px-4 py-3 transition-all duration-200',
-                    isActive
-                      ? 'border-white/20 bg-white/10 shadow-lg shadow-indigo-500/10'
-                      : 'hover:border-white/10 hover:bg-white/5 hover:shadow-md hover:shadow-indigo-500/5',
-                  ].join(' ')
-                }
-              >
-                <p className="text-sm font-semibold text-white">{link.label}</p>
-                <p className="text-xs text-white/60">{link.description}</p>
-              </NavLink>
-            )
-          )}
-        </nav>
-
-        <div className="mt-10 rounded-2xl border border-white/10 bg-white/5 p-5 text-sm text-white/70">
-          <p className="mb-2 text-sm font-semibold text-white">Need a tour?</p>
-          <p className="text-xs text-white/60">
-            Explore interactive walkthroughs tailored for your role and get the best out of Lumina LMS.
-          </p>
           <button
             type="button"
-            onClick={() => {
-              // Launch onboarding tour
-              alert('Welcome to Lumina LMS!\n\nThis interactive tour will guide you through:\n- Dashboard overview\n- Course management\n- Assignment submissions\n- Calendar and events\n- Profile settings\n\nLet\'s get started!');
-              // In a real app, this would trigger a tour library like react-joyride or intro.js
-            }}
-            className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl bg-white/15 px-3 py-2 text-xs font-medium text-white transition hover:bg-white/25"
+            onClick={() => dispatch(toggleTheme())}
+            className="rounded-xl border border-white/20 bg-white/10 px-3 py-1.5 text-white transition hover:bg-white/20"
+            title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
           >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-            Launch onboarding
+            {theme === 'light' ? (
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+              </svg>
+            ) : (
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+            )}
           </button>
         </div>
+
+        <nav className="flex-1 space-y-2 overflow-y-auto">
+          {renderLinks()}
+        </nav>
+
+        <OnboardingTourButton onLaunchTour={onLaunchTour} />
       </div>
     </aside>
   );
 };
 
 export default Sidebar;
-

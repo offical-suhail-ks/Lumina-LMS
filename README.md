@@ -33,6 +33,16 @@ Lumina LMS is a full-featured learning management platform that provides:
 - **Communication**: Mailbox system for announcements and messaging
 - **Calendar Integration**: Event management and scheduling
 - **Department-Based Organization**: Organize courses and faculty by departments
+- **Interactive Onboarding**: Tablet-style tour showcasing all platform features
+- **Feature Management**: Admin-controlled feature flags to enable/disable functionality
+- **Activity Logging**: Comprehensive system activity tracking and audit logs
+- **Quizzes & Exams**: AI-powered quiz creation and management
+- **Discussion Forum**: Course-based discussion threads and Q&A
+- **Video Library**: Upload and manage course videos with progress tracking
+- **Analytics Dashboard**: Advanced analytics for students, courses, and system-wide metrics
+- **Certificates**: Digital certificate generation and management
+- **Achievements**: Badge system and student achievement tracking
+- **Theme Toggle**: Dark/light mode support
 
 ## ✨ Features
 
@@ -67,6 +77,19 @@ Lumina LMS is a full-featured learning management platform that provides:
   - Send payment reminders
   - Track payment history and installments
 
+- **System Management**
+  - Activity logs monitoring and audit trails
+  - Feature flag management (enable/disable features)
+  - System analytics and performance metrics
+  - Review and process student applications
+  - Attendance tracking and reports
+
+- **Content Management**
+  - Quiz and exam creation with AI-powered question generation
+  - Video upload and management for courses
+  - Certificate template creation and issuance
+  - Forum category and thread management
+
 ### 👨‍🏫 Faculty Features
 
 - **Course Management**
@@ -95,6 +118,18 @@ Lumina LMS is a full-featured learning management platform that provides:
   - View department courses
   - See pending submissions
   - Quick access to all tools
+
+- **Content Creation**
+  - Create quizzes with AI-powered question generation
+  - Upload course videos and multimedia content
+  - Create forum discussions and manage threads
+  - Issue certificates to students
+  - Take and manage student attendance
+
+- **Analytics**
+  - View course performance metrics
+  - Track student engagement
+  - Monitor submission and grading statistics
 
 ### 👨‍🎓 Student Features
 
@@ -128,11 +163,20 @@ Lumina LMS is a full-featured learning management platform that provides:
   - Download ID card as PDF
   - View academic information
 
+- **Learning Tools**
+  - Take quizzes and exams
+  - Participate in discussion forums
+  - Watch course videos with progress tracking
+  - View detailed analytics and performance metrics
+  - Earn certificates and achievements
+
 - **Additional Features**
   - Study schedule planner
   - Resources library
   - Calendar with events
   - Mailbox for communications
+  - Dark/light theme toggle
+  - Interactive onboarding tour
 
 ## 🛠 Tech Stack
 
@@ -271,6 +315,10 @@ npm run db:migrate-payments
 
 # Add fee due date and reminders
 npm run db:migrate-fee-due-date
+
+# Add feature flags table
+cd server
+node database/create-feature-flags-table.js
 ```
 
 ### 3. Create Default Faculty User (Optional)
@@ -460,6 +508,61 @@ LMS-PLATFROM/
 - **Faculty Assignment**: Assign faculty to departments
 - **Filtered Views**: Faculty see only their department's courses
 
+### Interactive Onboarding Tour
+- **Tablet-Style Preview**: Beautiful tablet interface showcasing all features
+- **Role-Based Content**: Different tours for students, faculty, admin, and accounting
+- **Live Feature Previews**: See actual interface previews for each feature
+- **Step-by-Step Navigation**: Guided tour with progress tracking
+- **Feature Management**: Admins can enable/disable the tour
+
+### Feature Management System
+- **Feature Flags**: Admin-controlled feature toggles
+- **Granular Control**: Enable/disable individual features (quizzes, videos, forums, etc.)
+- **Role-Based Restrictions**: Configure features per user role
+- **Real-Time Updates**: Changes reflect immediately across the platform
+
+### Quizzes & Exams
+- **AI-Powered Generation**: Automatic quiz question generation (placeholder for AI integration)
+- **Multiple Question Types**: Multiple choice, true/false, and more
+- **Time Limits**: Set time constraints for quizzes
+- **Auto-Grading**: Automatic scoring for objective questions
+- **Results Tracking**: View quiz results and performance analytics
+
+### Discussion Forum
+- **Course-Based Threads**: Organize discussions by course
+- **Q&A System**: Mark answers as solutions
+- **Rich Interactions**: Reply, upvote, and engage with posts
+- **Category Management**: Organize forums by topics
+
+### Video Library
+- **Course Videos**: Upload and organize videos by course and module
+- **Progress Tracking**: Track video watch progress
+- **Multiple Formats**: Support for MP4, WebM, OGG, and QuickTime
+- **Large File Support**: Up to 500MB video uploads
+
+### Analytics Dashboard
+- **Student Performance**: Detailed grade tracking and analytics
+- **Course Analytics**: Enrollment, completion, and engagement metrics
+- **System Analytics**: Platform-wide statistics and insights
+- **Visual Charts**: Graphical representation of data
+
+### Certificates & Achievements
+- **Digital Certificates**: Generate and issue course completion certificates
+- **Custom Templates**: Create certificate templates
+- **Achievement Badges**: Track and display student achievements
+- **Verification**: Certificate verification system
+
+### Activity Logging
+- **Comprehensive Tracking**: Log all system activities
+- **User Actions**: Track user actions, logins, and changes
+- **Audit Trail**: Complete audit log for security and compliance
+- **Filtering**: Filter logs by user, action, entity, and date range
+
+### Theme Management
+- **Dark/Light Mode**: Toggle between dark and light themes
+- **Persistent Settings**: Theme preference saved in localStorage
+- **Consistent UI**: Theme applied across all components
+
 ## 📡 API Documentation
 
 ### Authentication
@@ -508,6 +611,58 @@ LMS-PLATFROM/
 - `GET /faculty` - Get all faculty
 - `POST /faculty` - Create faculty user
 - `PUT /faculty/:id` - Update faculty
+
+### Quizzes
+- `GET /quizzes` - Get all quizzes
+- `GET /quizzes/:id` - Get quiz by ID
+- `POST /quizzes` - Create quiz
+- `POST /quizzes/:id/questions` - Add questions to quiz
+- `POST /quizzes/:id/start` - Start quiz attempt
+- `POST /quizzes/:id/submit` - Submit quiz attempt
+- `GET /quizzes/:id/results` - Get quiz results
+
+### Forum
+- `GET /forum/categories` - Get forum categories
+- `GET /forum/threads` - Get forum threads
+- `POST /forum/threads` - Create thread
+- `POST /forum/threads/:id/replies` - Reply to thread
+- `PUT /forum/replies/:id/solution` - Mark reply as solution
+
+### Videos
+- `GET /videos` - Get all videos
+- `GET /videos/course/:courseId` - Get videos by course
+- `POST /videos` - Upload video
+- `PUT /videos/:id/progress` - Update video progress
+
+### Analytics
+- `GET /analytics/student/:studentId/performance` - Get student performance
+- `GET /analytics/course/:courseId` - Get course analytics
+- `GET /analytics/system` - Get system analytics
+- `POST /analytics/events` - Track event
+
+### Certificates
+- `GET /certificates` - Get all certificates
+- `GET /certificates/student/:studentId` - Get student certificates
+- `POST /certificates` - Create certificate
+- `GET /certificates/verify/:id` - Verify certificate
+
+### Achievements
+- `GET /achievements` - Get all achievements
+- `GET /achievements/student/:studentId` - Get student achievements
+- `POST /achievements` - Create achievement
+- `POST /achievements/:studentId/:achievementId/award` - Award achievement
+
+### Activity Logs
+- `GET /activity-logs` - Get activity logs (with filters)
+- `POST /activity-logs` - Log activity
+
+### Feature Flags
+- `GET /feature-flags` - Get all feature flags
+- `GET /feature-flags/enabled/:role` - Get enabled flags for role
+- `GET /feature-flags/check/:featureKey` - Check if feature is enabled
+- `PUT /feature-flags/:featureKey/toggle` - Toggle feature flag
+- `POST /feature-flags` - Create feature flag
+- `PUT /feature-flags/:id` - Update feature flag
 
 ## 🛠 Development
 

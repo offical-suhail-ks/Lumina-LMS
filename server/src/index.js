@@ -20,14 +20,27 @@ const accountingUserService = require('./services/accountingUserService');
 const attendanceService = require('./services/attendanceService');
 const mailboxService = require('./services/mailboxService');
 const passwordResetService = require('./services/passwordResetService');
+const quizService = require('./services/quizService');
+const forumService = require('./services/forumService');
+const certificateService = require('./services/certificateService');
+const notificationService = require('./services/notificationService');
+const analyticsService = require('./services/analyticsService');
+const videoService = require('./services/videoService');
+const achievementService = require('./services/achievementService');
+const activityLogService = require('./services/activityLogService');
+const featureFlagService = require('./services/featureFlagService');
 const { query } = require('./db');
 const path = require('path');
 const fs = require('fs');
 
 // Configure multer for file uploads
 const uploadsDir = path.join(__dirname, '../uploads/modules');
+const videosDir = path.join(__dirname, '../uploads/videos');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
+}
+if (!fs.existsSync(videosDir)) {
+  fs.mkdirSync(videosDir, { recursive: true });
 }
 
 const storage = multer.diskStorage({
@@ -40,7 +53,29 @@ const storage = multer.diskStorage({
   },
 });
 
+const videoStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, videosDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueName = `${uuid()}-${file.originalname}`;
+    cb(null, uniqueName);
+  },
+});
+
 const upload = multer({ storage });
+const uploadVideo = multer({ 
+  storage: videoStorage,
+  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB limit
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['video/mp4', 'video/webm', 'video/ogg', 'video/quicktime'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only video files are allowed.'));
+    }
+  },
+});
 
 const app = express();
 app.use(cors({ origin: '*', credentials: true }));
@@ -1598,6 +1633,588 @@ app.get('/auth/verify-reset-token', async (req, res) => {
     res.status(500).json({ message: 'Failed to verify token' });
   }
 });
+
+// ============================================
+// QUIZ/EXAM ENDPOINTS
+// ============================================
+app.post('/quizzes', async (req, res) => {
+  try {
+    const quiz = await quizService.createQuiz(req.body);
+    res.status(201).json(quiz);
+  } catch (error) {
+    console.error('Error creating quiz:', error);
+    res.status(500).json({ message: 'Failed to create quiz' });
+  }
+});
+
+app.get('/quizzes/course/:courseId', async (req, res) => {
+  try {
+    const quizzes = await quizService.getQuizzesByCourse(req.params.courseId);
+    res.json(quizzes);
+  } catch (error) {
+    console.error('Error fetching quizzes:', error);
+    res.status(500).json({ message: 'Failed to fetch quizzes' });
+  }
+});
+
+app.get('/quizzes/:id', async (req, res) => {
+  try {
+    const quiz = await quizService.getQuizById(req.params.id);
+    if (!quiz) {
+      return res.status(404).json({ message: 'Quiz not found' });
+    }
+    quiz.questions = await quizService.getQuestionsByQuiz(req.params.id);
+    res.json(quiz);
+  } catch (error) {
+    console.error('Error fetching quiz:', error);
+    res.status(500).json({ message: 'Failed to fetch quiz' });
+  }
+});
+
+app.post('/quizzes/:quizId/questions', async (req, res) => {
+  try {
+    const question = await quizService.addQuestion({
+      ...req.body,
+      quizId: req.params.quizId,
+    });
+    res.status(201).json(question);
+  } catch (error) {
+    console.error('Error adding question:', error);
+    res.status(500).json({ message: 'Failed to add question' });
+  }
+});
+
+app.post('/quizzes/questions/:questionId/options', async (req, res) => {
+  try {
+    const option = await quizService.addQuestionOption({
+      ...req.body,
+      questionId: req.params.questionId,
+    });
+    res.status(201).json(option);
+  } catch (error) {
+    console.error('Error adding option:', error);
+    res.status(500).json({ message: 'Failed to add option' });
+  }
+});
+
+app.post('/quizzes/:quizId/start', async (req, res) => {
+  try {
+    const attempt = await quizService.startAttempt(req.params.quizId, req.body.studentId);
+    res.status(201).json(attempt);
+  } catch (error) {
+    console.error('Error starting quiz:', error);
+    res.status(500).json({ message: error.message || 'Failed to start quiz' });
+  }
+});
+
+app.post('/quizzes/attempts/:attemptId/answers', async (req, res) => {
+  try {
+    const answer = await quizService.submitAnswer(req.params.attemptId, req.body.questionId, req.body);
+    res.status(201).json(answer);
+  } catch (error) {
+    console.error('Error submitting answer:', error);
+    res.status(500).json({ message: 'Failed to submit answer' });
+  }
+});
+
+app.post('/quizzes/attempts/:attemptId/submit', async (req, res) => {
+  try {
+    const attempt = await quizService.submitAttempt(req.params.attemptId, req.body.timeTaken);
+    res.json(attempt);
+  } catch (error) {
+    console.error('Error submitting quiz:', error);
+    res.status(500).json({ message: 'Failed to submit quiz' });
+  }
+});
+
+app.get('/quizzes/attempts/:attemptId/results', async (req, res) => {
+  try {
+    const results = await quizService.getAttemptResults(req.params.attemptId);
+    res.json(results);
+  } catch (error) {
+    console.error('Error fetching results:', error);
+    res.status(500).json({ message: 'Failed to fetch results' });
+  }
+});
+
+// ============================================
+// FORUM ENDPOINTS
+// ============================================
+app.post('/forum/categories', async (req, res) => {
+  try {
+    const category = await forumService.createCategory(req.body);
+    res.status(201).json(category);
+  } catch (error) {
+    console.error('Error creating category:', error);
+    res.status(500).json({ message: 'Failed to create category' });
+  }
+});
+
+app.get('/forum/categories/course/:courseId', async (req, res) => {
+  try {
+    const categories = await forumService.getCategoriesByCourse(req.params.courseId);
+    res.json(categories);
+  } catch (error) {
+    console.error('Error fetching categories:', error);
+    res.status(500).json({ message: 'Failed to fetch categories' });
+  }
+});
+
+app.post('/forum/threads', async (req, res) => {
+  try {
+    const thread = await forumService.createThread(req.body);
+    res.status(201).json(thread);
+  } catch (error) {
+    console.error('Error creating thread:', error);
+    res.status(500).json({ message: 'Failed to create thread' });
+  }
+});
+
+app.get('/forum/threads/category/:categoryId', async (req, res) => {
+  try {
+    const threads = await forumService.getThreadsByCategory(req.params.categoryId);
+    res.json(threads);
+  } catch (error) {
+    console.error('Error fetching threads:', error);
+    res.status(500).json({ message: 'Failed to fetch threads' });
+  }
+});
+
+app.get('/forum/threads/:id', async (req, res) => {
+  try {
+    const thread = await forumService.getThreadById(req.params.id);
+    if (!thread) {
+      return res.status(404).json({ message: 'Thread not found' });
+    }
+    thread.replies = await forumService.getRepliesByThread(req.params.id);
+    res.json(thread);
+  } catch (error) {
+    console.error('Error fetching thread:', error);
+    res.status(500).json({ message: 'Failed to fetch thread' });
+  }
+});
+
+app.post('/forum/replies', async (req, res) => {
+  try {
+    const reply = await forumService.createReply(req.body);
+    res.status(201).json(reply);
+  } catch (error) {
+    console.error('Error creating reply:', error);
+    res.status(500).json({ message: 'Failed to create reply' });
+  }
+});
+
+app.post('/forum/replies/:id/solution', async (req, res) => {
+  try {
+    const reply = await forumService.markAsSolution(req.params.id);
+    res.json(reply);
+  } catch (error) {
+    console.error('Error marking solution:', error);
+    res.status(500).json({ message: 'Failed to mark solution' });
+  }
+});
+
+// ============================================
+// CERTIFICATE ENDPOINTS
+// ============================================
+app.post('/certificates', async (req, res) => {
+  try {
+    const certificate = await certificateService.createCertificate(req.body);
+    res.status(201).json(certificate);
+  } catch (error) {
+    console.error('Error creating certificate:', error);
+    res.status(500).json({ message: 'Failed to create certificate' });
+  }
+});
+
+app.get('/certificates/student/:studentId', async (req, res) => {
+  try {
+    const certificates = await certificateService.getCertificatesByStudent(req.params.studentId);
+    res.json(certificates);
+  } catch (error) {
+    console.error('Error fetching certificates:', error);
+    res.status(500).json({ message: 'Failed to fetch certificates' });
+  }
+});
+
+app.get('/certificates/verify/:verificationCode', async (req, res) => {
+  try {
+    const certificate = await certificateService.verifyCertificate(req.params.verificationCode);
+    if (!certificate) {
+      return res.status(404).json({ message: 'Certificate not found' });
+    }
+    res.json(certificate);
+  } catch (error) {
+    console.error('Error verifying certificate:', error);
+    res.status(500).json({ message: 'Failed to verify certificate' });
+  }
+});
+
+// ============================================
+// NOTIFICATION ENDPOINTS
+// ============================================
+app.post('/notifications', async (req, res) => {
+  try {
+    const notification = await notificationService.createNotification(req.body);
+    res.status(201).json(notification);
+  } catch (error) {
+    console.error('Error creating notification:', error);
+    res.status(500).json({ message: 'Failed to create notification' });
+  }
+});
+
+app.get('/notifications/:userId/:userType', async (req, res) => {
+  try {
+    const { unreadOnly, limit } = req.query;
+    const notifications = await notificationService.getNotificationsByUser(
+      req.params.userId,
+      req.params.userType,
+      { unreadOnly: unreadOnly === 'true', limit: limit ? parseInt(limit) : null }
+    );
+    res.json(notifications);
+  } catch (error) {
+    console.error('Error fetching notifications:', error);
+    res.status(500).json({ message: 'Failed to fetch notifications' });
+  }
+});
+
+app.get('/notifications/:userId/:userType/unread-count', async (req, res) => {
+  try {
+    const count = await notificationService.getUnreadCount(req.params.userId, req.params.userType);
+    res.json({ count });
+  } catch (error) {
+    console.error('Error fetching unread count:', error);
+    res.status(500).json({ message: 'Failed to fetch unread count' });
+  }
+});
+
+app.post('/notifications/:id/read', async (req, res) => {
+  try {
+    const notification = await notificationService.markAsRead(req.params.id);
+    res.json(notification);
+  } catch (error) {
+    console.error('Error marking notification as read:', error);
+    res.status(500).json({ message: 'Failed to mark notification as read' });
+  }
+});
+
+app.post('/notifications/:userId/:userType/read-all', async (req, res) => {
+  try {
+    await notificationService.markAllAsRead(req.params.userId, req.params.userType);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error marking all as read:', error);
+    res.status(500).json({ message: 'Failed to mark all as read' });
+  }
+});
+
+// ============================================
+// ANALYTICS ENDPOINTS
+// ============================================
+app.post('/analytics/events', async (req, res) => {
+  try {
+    await analyticsService.trackEvent(req.body);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error tracking event:', error);
+    res.status(500).json({ message: 'Failed to track event' });
+  }
+});
+
+app.get('/analytics/student/:studentId/performance', async (req, res) => {
+  try {
+    const performance = await analyticsService.getStudentPerformance(req.params.studentId);
+    res.json(performance);
+  } catch (error) {
+    console.error('Error fetching performance:', error);
+    res.status(500).json({ message: 'Failed to fetch performance' });
+  }
+});
+
+app.get('/analytics/course/:courseId', async (req, res) => {
+  try {
+    const analytics = await analyticsService.getCourseAnalytics(req.params.courseId);
+    res.json(analytics);
+  } catch (error) {
+    console.error('Error fetching course analytics:', error);
+    res.status(500).json({ message: 'Failed to fetch course analytics' });
+  }
+});
+
+app.get('/analytics/system', async (req, res) => {
+  try {
+    const analytics = await analyticsService.getSystemAnalytics();
+    res.json(analytics);
+  } catch (error) {
+    console.error('Error fetching system analytics:', error);
+    res.status(500).json({ message: 'Failed to fetch system analytics' });
+  }
+});
+
+// ============================================
+// VIDEO ENDPOINTS
+// ============================================
+app.post('/videos', uploadVideo.single('video'), async (req, res) => {
+  try {
+    const videoData = {
+      ...req.body,
+      videoUrl: req.file ? `/uploads/videos/${req.file.filename}` : req.body.videoUrl,
+      videoType: req.file ? 'upload' : req.body.videoType || 'youtube',
+    };
+    const video = await videoService.addVideo(videoData);
+    res.status(201).json(video);
+  } catch (error) {
+    console.error('Error adding video:', error);
+    res.status(500).json({ message: error.message || 'Failed to add video' });
+  }
+});
+
+app.get('/videos/course/:courseId', async (req, res) => {
+  try {
+    const videos = await videoService.getVideosByCourse(req.params.courseId);
+    res.json(videos);
+  } catch (error) {
+    console.error('Error fetching videos:', error);
+    res.status(500).json({ message: 'Failed to fetch videos' });
+  }
+});
+
+app.post('/videos/:videoId/progress', async (req, res) => {
+  try {
+    const progress = await videoService.updateVideoProgress(
+      req.params.videoId,
+      req.body.studentId,
+      req.body
+    );
+    res.json(progress);
+  } catch (error) {
+    console.error('Error updating progress:', error);
+    res.status(500).json({ message: 'Failed to update progress' });
+  }
+});
+
+app.get('/videos/:videoId/progress/:studentId', async (req, res) => {
+  try {
+    const progress = await videoService.getVideoProgress(req.params.videoId, req.params.studentId);
+    res.json(progress);
+  } catch (error) {
+    console.error('Error fetching progress:', error);
+    res.status(500).json({ message: 'Failed to fetch progress' });
+  }
+});
+
+// ============================================
+// ACHIEVEMENT ENDPOINTS
+// ============================================
+app.post('/achievements', async (req, res) => {
+  try {
+    const achievement = await achievementService.createAchievement(req.body);
+    res.status(201).json(achievement);
+  } catch (error) {
+    console.error('Error creating achievement:', error);
+    res.status(500).json({ message: 'Failed to create achievement' });
+  }
+});
+
+app.get('/achievements', async (req, res) => {
+  try {
+    const achievements = await achievementService.getAllAchievements();
+    res.json(achievements);
+  } catch (error) {
+    console.error('Error fetching achievements:', error);
+    res.status(500).json({ message: 'Failed to fetch achievements' });
+  }
+});
+
+app.get('/achievements/student/:studentId', async (req, res) => {
+  try {
+    const achievements = await achievementService.getStudentAchievements(req.params.studentId);
+    res.json(achievements);
+  } catch (error) {
+    console.error('Error fetching student achievements:', error);
+    res.status(500).json({ message: 'Failed to fetch student achievements' });
+  }
+});
+
+app.post('/achievements/:achievementId/award/:studentId', async (req, res) => {
+  try {
+    const studentAchievement = await achievementService.awardAchievement(
+      req.params.studentId,
+      req.params.achievementId
+    );
+    res.status(201).json(studentAchievement);
+  } catch (error) {
+    console.error('Error awarding achievement:', error);
+    res.status(500).json({ message: 'Failed to award achievement' });
+  }
+});
+
+// ============================================
+// ACTIVITY LOG ENDPOINTS
+// ============================================
+app.get('/activity-logs', async (req, res) => {
+  try {
+    const logs = await activityLogService.getActivityLogs(req.query);
+    res.json(logs);
+  } catch (error) {
+    console.error('Error fetching activity logs:', error);
+    res.status(500).json({ message: 'Failed to fetch activity logs' });
+  }
+});
+
+app.post('/activity-logs', async (req, res) => {
+  try {
+    await activityLogService.logActivity(req.body);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error logging activity:', error);
+    res.status(500).json({ message: 'Failed to log activity' });
+  }
+});
+
+// ============================================
+// EXPORT ENDPOINTS
+// ============================================
+app.get('/export/students', async (req, res) => {
+  try {
+    const students = await studentService.listStudents();
+    const csv = convertToCSV(students);
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename=students.csv');
+    res.send(csv);
+  } catch (error) {
+    console.error('Error exporting students:', error);
+    res.status(500).json({ message: 'Failed to export students' });
+  }
+});
+
+app.get('/export/courses', async (req, res) => {
+  try {
+    const courses = await courseService.listCourses();
+    const csv = convertToCSV(courses);
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename=courses.csv');
+    res.send(csv);
+  } catch (error) {
+    console.error('Error exporting courses:', error);
+    res.status(500).json({ message: 'Failed to export courses' });
+  }
+});
+
+// ============================================
+// FEATURE FLAGS ENDPOINTS
+// ============================================
+app.get('/feature-flags', async (req, res) => {
+  try {
+    const flags = await featureFlagService.getAllFeatureFlags();
+    res.json(flags);
+  } catch (error) {
+    console.error('Error fetching feature flags:', error);
+    res.status(500).json({ message: 'Failed to fetch feature flags' });
+  }
+});
+
+app.get('/feature-flags/enabled/:role', async (req, res) => {
+  try {
+    const flags = await featureFlagService.getEnabledFlagsForRole(req.params.role);
+    res.json(flags);
+  } catch (error) {
+    console.error('Error fetching enabled flags:', error);
+    res.status(500).json({ message: 'Failed to fetch enabled flags' });
+  }
+});
+
+app.get('/feature-flags/check/:featureKey', async (req, res) => {
+  try {
+    const role = req.query.role || null;
+    const isEnabled = await featureFlagService.isFeatureEnabled(req.params.featureKey, role);
+    res.json({ enabled: isEnabled });
+  } catch (error) {
+    console.error('Error checking feature flag:', error);
+    res.status(500).json({ message: 'Failed to check feature flag' });
+  }
+});
+
+app.put('/feature-flags/:featureKey/toggle', async (req, res) => {
+  try {
+    const { enabled } = req.body;
+    const result = await featureFlagService.toggleFeature(req.params.featureKey, enabled);
+    res.json(result);
+  } catch (error) {
+    console.error('Error toggling feature flag:', error);
+    res.status(500).json({ message: 'Failed to toggle feature flag' });
+  }
+});
+
+app.put('/feature-flags/:id', async (req, res) => {
+  try {
+    const result = await featureFlagService.updateFeatureFlag(req.params.id, req.body);
+    res.json(result);
+  } catch (error) {
+    console.error('Error updating feature flag:', error);
+    res.status(500).json({ message: 'Failed to update feature flag' });
+  }
+});
+
+app.post('/feature-flags', async (req, res) => {
+  try {
+    const result = await featureFlagService.createFeatureFlag(req.body);
+    res.status(201).json(result);
+  } catch (error) {
+    console.error('Error creating feature flag:', error);
+    res.status(500).json({ message: 'Failed to create feature flag' });
+  }
+});
+
+app.delete('/feature-flags/:id', async (req, res) => {
+  try {
+    const result = await featureFlagService.deleteFeatureFlag(req.params.id);
+    res.json(result);
+  } catch (error) {
+    console.error('Error deleting feature flag:', error);
+    res.status(500).json({ message: 'Failed to delete feature flag' });
+  }
+});
+
+// ============================================
+// AI ENDPOINTS (Placeholder for AI integration)
+// ============================================
+app.post('/ai/generate-questions', async (req, res) => {
+  try {
+    // Placeholder for AI integration
+    // In production, this would call an AI service like OpenAI, Anthropic, etc.
+    const { topic, courseId, count = 5 } = req.body;
+    
+    // Demo response - replace with actual AI service call
+    const questions = Array.from({ length: count }, (_, i) => ({
+      questionText: `Sample question ${i + 1} about ${topic}?`,
+      questionType: 'multiple_choice',
+      points: 1,
+      options: [
+        { text: 'Option A', isCorrect: i === 0 },
+        { text: 'Option B', isCorrect: false },
+        { text: 'Option C', isCorrect: false },
+        { text: 'Option D', isCorrect: false },
+      ],
+    }));
+
+    res.json({ questions, message: 'AI integration pending - using demo questions' });
+  } catch (error) {
+    console.error('Error generating questions:', error);
+    res.status(500).json({ message: 'Failed to generate questions' });
+  }
+});
+
+// Helper function to convert data to CSV
+function convertToCSV(data) {
+  if (!data || data.length === 0) return '';
+  const headers = Object.keys(data[0]);
+  const rows = data.map(row => headers.map(header => {
+    const value = row[header];
+    return typeof value === 'string' && value.includes(',') ? `"${value}"` : value;
+  }).join(','));
+  return [headers.join(','), ...rows].join('\n');
+}
 
 app.listen(PORT, () => {
   console.log(`🚀 Lumina LMS API running on http://localhost:${PORT}`);
