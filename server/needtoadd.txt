@@ -1,0 +1,3 @@
+1.create accounting team
+2.on student creation insted sending offerletter to mail send the form to accounting team they should add the fee deatiles and all. 
+3.dropdown for creating in admin

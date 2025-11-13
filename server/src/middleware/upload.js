@@ -1,10 +1,9 @@
-import multer from 'multer';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import fs from 'fs';
+/* eslint-env node */
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+const { v4: uuid } = require('uuid');
 
 // Ensure upload directories exist
 const uploadsDir = path.join(__dirname, '../../uploads');
@@ -23,8 +22,8 @@ const moduleStorage = multer.diskStorage({
     cb(null, modulesDir);
   },
   filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, 'module-' + uniqueSuffix + path.extname(file.originalname));
+    const uniqueName = `${uuid()}-${file.originalname}`;
+    cb(null, uniqueName);
   },
 });
 
@@ -34,8 +33,8 @@ const assignmentStorage = multer.diskStorage({
     cb(null, assignmentsDir);
   },
   filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, 'assignment-' + uniqueSuffix + path.extname(file.originalname));
+    const uniqueName = `${uuid()}-${file.originalname}`;
+    cb(null, uniqueName);
   },
 });
 
@@ -57,15 +56,20 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-export const uploadModuleMaterial = multer({
+const uploadModuleMaterial = multer({
   storage: moduleStorage,
   fileFilter,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
 });
 
-export const uploadAssignment = multer({
+const uploadAssignment = multer({
   storage: assignmentStorage,
   fileFilter,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
 });
+
+module.exports = {
+  uploadModuleMaterial,
+  uploadAssignment,
+};
 

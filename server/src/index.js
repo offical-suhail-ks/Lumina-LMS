@@ -15,6 +15,9 @@ const calendarService = require('./services/calendarService');
 const facultyService = require('./services/facultyService');
 const moduleService = require('./services/moduleService');
 const paymentService = require('./services/paymentService');
+const accountingService = require('./services/accountingService');
+const accountingUserService = require('./services/accountingUserService');
+const attendanceService = require('./services/attendanceService');
 const { query } = require('./db');
 const path = require('path');
 const fs = require('fs');
@@ -132,10 +135,8 @@ app.post('/students', async (req, res) => {
     const { 
       firstName, lastName, email, password, 
       phone, dateOfBirth, address, city, state, country, postalCode,
-      courseId, year, cohort, 
-      courseFee, paymentPlan, paymentPlanDetails,
-      feeDueDate, sendReminder,
-      guardian, sendOfferLetter 
+      courseId, year, cohort, batchTiming, classSchedule,
+      guardian, adminRemarks
     } = req.body ?? {};
 
     if (!firstName || !lastName || !email) {
@@ -161,39 +162,32 @@ app.post('/students', async (req, res) => {
       courseId,
       year,
       cohort,
-      courseFee,
-      paymentPlan,
-      paymentPlanDetails,
-      feeDueDate,
-      sendReminder: sendReminder !== undefined ? sendReminder : true,
+      batchTiming,
+      classSchedule,
       guardian,
     });
 
-    // Get course details for offer letter
-    let course = null;
-    if (courseId) {
-      try {
-        course = await courseService.getById(courseId);
-      } catch (error) {
-        console.error('Error fetching course for offer letter:', error);
-      }
-    }
-
-    // Send offer letter or welcome email
-    if (sendOfferLetter) {
-      sendStudentOfferLetter({ ...student, password }, course).catch(error => {
-        console.error('Failed to send offer letter:', error);
-      });
+    // Create accounting task instead of sending offer letter
+    // The accounting team will handle fee setup and then send the offer letter
+    try {
+      const course = courseId ? await courseService.getById(courseId) : null;
       
-      // Update offer letter sent status
-      await query(
-        'UPDATE students SET offer_letter_sent = TRUE, offer_letter_sent_at = CURRENT_TIMESTAMP WHERE id = ?',
-        [student.id]
-      );
-    } else {
-      sendStudentWelcomeEmail({ ...student, password }).catch(error => {
-        console.error('Failed to send student welcome email:', error);
+      await accountingService.createTask({
+        studentId: student.id,
+        taskType: 'fee_setup',
+        priority: 'high',
+        title: `Fee Setup Required: ${student.firstName} ${student.lastName}`,
+        description: `New student enrollment requires fee details to be set up. Student: ${student.firstName} ${student.lastName} (${student.email})${course ? `. Course: ${course.title}` : ''}`,
+        studentData: {
+          ...student,
+          password: password, // Include password for offer letter generation later
+          course: course ? { id: course.id, title: course.title } : null,
+        },
+        adminRemarks: adminRemarks || null,
       });
+    } catch (error) {
+      console.error('Failed to create accounting task:', error);
+      // Continue even if task creation fails
     }
 
     // Don't send password in response
@@ -317,6 +311,80 @@ app.delete('/faculty/:id', async (req, res) => {
   } catch (error) {
     console.error('Error deleting faculty:', error);
     res.status(500).json({ message: 'Failed to delete faculty' });
+  }
+});
+
+// Accounting user management endpoints
+app.get('/accounting-users', async (_req, res) => {
+  try {
+    const users = await accountingUserService.getAll();
+    res.json(users);
+  } catch (error) {
+    console.error('Error fetching accounting users:', error);
+    res.status(500).json({ message: 'Failed to fetch accounting users' });
+  }
+});
+
+app.post('/accounting-users', async (req, res) => {
+  try {
+    const { name, email, username, password } = req.body ?? {};
+
+    if (!name || !email || !username) {
+      return res.status(400).json({ message: 'Name, email, and username are required' });
+    }
+
+    if (!password) {
+      return res.status(400).json({ message: 'Password is required' });
+    }
+
+    const user = await accountingUserService.create({
+      name,
+      email,
+      username,
+      password,
+    });
+
+    // Don't send password in response
+    const { password: _, ...userResponse } = user;
+    res.status(201).json(userResponse);
+  } catch (error) {
+    console.error('Error creating accounting user:', error);
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ message: 'Accounting user with this email or username already exists' });
+    }
+    res.status(500).json({ message: 'Failed to create accounting user' });
+  }
+});
+
+app.put('/accounting-users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = await accountingUserService.update(id, req.body);
+
+    if (!user) {
+      return res.status(404).json({ message: 'Accounting user not found' });
+    }
+
+    res.json(user);
+  } catch (error) {
+    console.error('Error updating accounting user:', error);
+    res.status(500).json({ message: 'Failed to update accounting user' });
+  }
+});
+
+app.delete('/accounting-users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deleted = await accountingUserService.delete(id);
+
+    if (!deleted) {
+      return res.status(404).json({ message: 'Accounting user not found' });
+    }
+
+    res.json({ message: 'Accounting user deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting accounting user:', error);
+    res.status(500).json({ message: 'Failed to delete accounting user' });
   }
 });
 
@@ -862,6 +930,361 @@ app.post('/students/:studentId/send-payment-reminder', async (req, res) => {
   } catch (error) {
     console.error('Error sending payment reminder:', error);
     res.status(500).json({ message: 'Failed to send payment reminder' });
+  }
+});
+
+// Accounting endpoints
+app.get('/accounting/tasks', async (req, res) => {
+  try {
+    const { status, assignedTo, taskType } = req.query;
+    const tasks = await accountingService.getAllTasks({
+      status,
+      assignedTo,
+      taskType,
+    });
+    res.json(tasks);
+  } catch (error) {
+    console.error('Error fetching accounting tasks:', error);
+    res.status(500).json({ message: 'Failed to fetch accounting tasks' });
+  }
+});
+
+app.get('/accounting/tasks/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const task = await accountingService.getTaskById(id);
+
+    if (!task) {
+      return res.status(404).json({ message: 'Task not found' });
+    }
+
+    res.json(task);
+  } catch (error) {
+    console.error('Error fetching accounting task:', error);
+    res.status(500).json({ message: 'Failed to fetch accounting task' });
+  }
+});
+
+app.put('/accounting/tasks/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const task = await accountingService.updateTask(id, req.body);
+
+    if (!task) {
+      return res.status(404).json({ message: 'Task not found' });
+    }
+
+    res.json(task);
+  } catch (error) {
+    console.error('Error updating accounting task:', error);
+    res.status(500).json({ message: 'Failed to update accounting task' });
+  }
+});
+
+app.post('/accounting/tasks/:id/send-to-admin', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { completedBy, feeDetails, accountingRemarks } = req.body;
+
+    const task = await accountingService.sendToAdmin(id, completedBy, feeDetails, accountingRemarks);
+
+    if (!task) {
+      return res.status(404).json({ message: 'Task not found' });
+    }
+
+    res.json(task);
+  } catch (error) {
+    console.error('Error sending task to admin:', error);
+    res.status(500).json({ message: 'Failed to send task to admin' });
+  }
+});
+
+app.post('/accounting/tasks/:id/complete', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { completedBy, feeDetails, accountingRemarks } = req.body;
+
+    const task = await accountingService.completeTask(id, completedBy, feeDetails, accountingRemarks);
+
+    if (!task) {
+      return res.status(404).json({ message: 'Task not found' });
+    }
+
+    res.json(task);
+  } catch (error) {
+    console.error('Error completing accounting task:', error);
+    res.status(500).json({ message: 'Failed to complete accounting task' });
+  }
+});
+
+app.post('/accounting/tasks/:id/review', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reviewedBy, action, adminRemarks } = req.body; // action: 'accept' or 'reject' or 'send_back'
+
+    const task = await accountingService.getTaskById(id);
+    if (!task) {
+      return res.status(404).json({ message: 'Task not found' });
+    }
+
+    if (action === 'accept') {
+      // Update student status to accepted
+      await query(
+        `UPDATE students SET application_status = 'accepted', updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        [task.studentId]
+      );
+
+      // Send offer letter
+      if (task.studentData) {
+        try {
+          const course = task.studentData.course ? await courseService.getById(task.studentData.course.id) : null;
+          await sendStudentOfferLetter(task.studentData, course);
+          
+          // Update offer letter sent status
+          await query(
+            'UPDATE students SET offer_letter_sent = TRUE, offer_letter_sent_at = CURRENT_TIMESTAMP WHERE id = ?',
+            [task.studentId]
+          );
+        } catch (error) {
+          console.error('Failed to send offer letter:', error);
+        }
+      }
+
+      // Mark task as completed
+      await accountingService.updateTask(id, {
+        status: 'completed',
+        reviewedBy,
+        adminRemarks,
+      });
+    } else if (action === 'send_back') {
+      // Send back to accounting with remarks
+      await query(
+        `UPDATE students SET application_status = 'fee_setup_pending', updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        [task.studentId]
+      );
+
+      await accountingService.updateTask(id, {
+        status: 'pending',
+        reviewedBy,
+        adminRemarks,
+      });
+    } else if (action === 'reject') {
+      // Reject application
+      await query(
+        `UPDATE students SET application_status = 'rejected', updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        [task.studentId]
+      );
+
+      await accountingService.updateTask(id, {
+        status: 'cancelled',
+        reviewedBy,
+        adminRemarks,
+      });
+    }
+
+    const updatedTask = await accountingService.getTaskById(id);
+    res.json(updatedTask);
+  } catch (error) {
+    console.error('Error reviewing task:', error);
+    res.status(500).json({ message: 'Failed to review task' });
+  }
+});
+
+// Salary management endpoints
+app.get('/accounting/salaries', async (req, res) => {
+  try {
+    const { employeeId, status, employeeType } = req.query;
+    const salaries = await accountingService.getAllSalaries({
+      employeeId,
+      status,
+      employeeType,
+    });
+    res.json(salaries);
+  } catch (error) {
+    console.error('Error fetching salaries:', error);
+    res.status(500).json({ message: 'Failed to fetch salaries' });
+  }
+});
+
+app.get('/accounting/salaries/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const salary = await accountingService.getSalaryById(id);
+
+    if (!salary) {
+      return res.status(404).json({ message: 'Salary record not found' });
+    }
+
+    res.json(salary);
+  } catch (error) {
+    console.error('Error fetching salary:', error);
+    res.status(500).json({ message: 'Failed to fetch salary' });
+  }
+});
+
+app.post('/accounting/salaries', async (req, res) => {
+  try {
+    const salary = await accountingService.createSalary(req.body);
+    res.status(201).json(salary);
+  } catch (error) {
+    console.error('Error creating salary:', error);
+    res.status(500).json({ message: 'Failed to create salary' });
+  }
+});
+
+app.put('/accounting/salaries/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const salary = await accountingService.updateSalary(id, req.body);
+
+    if (!salary) {
+      return res.status(404).json({ message: 'Salary record not found' });
+    }
+
+    res.json(salary);
+  } catch (error) {
+    console.error('Error updating salary:', error);
+    res.status(500).json({ message: 'Failed to update salary' });
+  }
+});
+
+// Salary payment endpoints
+app.get('/accounting/salaries/:salaryId/payments', async (req, res) => {
+  try {
+    const { salaryId } = req.params;
+    const payments = await accountingService.getSalaryPayments(salaryId);
+    res.json(payments);
+  } catch (error) {
+    console.error('Error fetching salary payments:', error);
+    res.status(500).json({ message: 'Failed to fetch salary payments' });
+  }
+});
+
+app.post('/accounting/salaries/:salaryId/payments', async (req, res) => {
+  try {
+    const { salaryId } = req.params;
+    const payment = await accountingService.createSalaryPayment({
+      ...req.body,
+      salaryId,
+    });
+    res.status(201).json(payment);
+  } catch (error) {
+    console.error('Error creating salary payment:', error);
+    res.status(500).json({ message: 'Failed to create salary payment' });
+  }
+});
+
+app.put('/accounting/salary-payments/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const payment = await accountingService.updateSalaryPayment(id, req.body);
+
+    if (!payment) {
+      return res.status(404).json({ message: 'Payment record not found' });
+    }
+
+    res.json(payment);
+  } catch (error) {
+    console.error('Error updating salary payment:', error);
+    res.status(500).json({ message: 'Failed to update salary payment' });
+  }
+});
+
+// Attendance endpoints
+// Get department students for faculty (only those with class today)
+app.get('/attendance/department-students', async (req, res) => {
+  try {
+    const { facultyId } = req.query;
+    
+    if (!facultyId) {
+      return res.status(400).json({ message: 'Faculty ID is required' });
+    }
+    
+    const students = await attendanceService.getDepartmentStudents(facultyId);
+    res.json(students);
+  } catch (error) {
+    console.error('Error fetching department students:', error);
+    res.status(500).json({ message: 'Failed to fetch department students' });
+  }
+});
+
+// Get attendance by date
+app.get('/attendance', async (req, res) => {
+  try {
+    const { date, facultyId } = req.query;
+    const attendanceDate = date || new Date().toISOString().split('T')[0];
+    
+    const attendance = await attendanceService.getAttendanceByDate(attendanceDate, facultyId || null);
+    res.json(attendance);
+  } catch (error) {
+    console.error('Error fetching attendance:', error);
+    res.status(500).json({ message: 'Failed to fetch attendance' });
+  }
+});
+
+// Mark attendance (single or bulk)
+app.post('/attendance', async (req, res) => {
+  try {
+    const { studentId, facultyId, attendanceDate, status, notes, attendanceList } = req.body;
+    
+    if (!facultyId || !attendanceDate) {
+      return res.status(400).json({ message: 'Faculty ID and attendance date are required' });
+    }
+    
+    if (attendanceList && Array.isArray(attendanceList)) {
+      // Bulk attendance
+      const results = await attendanceService.markBulkAttendance(attendanceList, facultyId, attendanceDate);
+      res.status(201).json(results);
+    } else {
+      // Single attendance
+      if (!studentId || !status) {
+        return res.status(400).json({ message: 'Student ID and status are required' });
+      }
+      
+      const attendance = await attendanceService.markAttendance({
+        studentId,
+        facultyId,
+        attendanceDate,
+        status,
+        notes,
+      });
+      res.status(201).json(attendance);
+    }
+  } catch (error) {
+    console.error('Error marking attendance:', error);
+    res.status(500).json({ message: 'Failed to mark attendance' });
+  }
+});
+
+// Get student attendance summary
+app.get('/attendance/student/:studentId/summary', async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    const summary = await attendanceService.getStudentAttendanceSummary(studentId);
+    res.json(summary);
+  } catch (error) {
+    console.error('Error fetching attendance summary:', error);
+    res.status(500).json({ message: 'Failed to fetch attendance summary' });
+  }
+});
+
+// Get all attendance (admin view)
+app.get('/attendance/all', async (req, res) => {
+  try {
+    const { studentId, facultyId, startDate, endDate, status } = req.query;
+    
+    const attendance = await attendanceService.getAllAttendance({
+      studentId: studentId || null,
+      facultyId: facultyId || null,
+      startDate: startDate || null,
+      endDate: endDate || null,
+      status: status || null,
+    });
+    
+    res.json(attendance);
+  } catch (error) {
+    console.error('Error fetching all attendance:', error);
+    res.status(500).json({ message: 'Failed to fetch attendance' });
   }
 });
 

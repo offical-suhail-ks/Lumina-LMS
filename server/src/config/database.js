@@ -1,18 +1,24 @@
-import mariadb from 'mariadb';
-import dotenv from 'dotenv';
+/* eslint-env node */
 
-dotenv.config();
+/**
+ * Database configuration file
+ * Note: This file is not currently used - db.js is the main database connection file
+ * Kept for potential future use or alternative configuration
+ */
+
+const mariadb = require('mariadb');
+require('dotenv').config();
 
 const pool = mariadb.createPool({
   host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT || '3306'),
+  port: parseInt(process.env.DB_PORT || '3306', 10),
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'lms_platform',
   connectionLimit: 10,
 });
 
-export const getConnection = async () => {
+const getConnection = async () => {
   try {
     return await pool.getConnection();
   } catch (error) {
@@ -21,7 +27,7 @@ export const getConnection = async () => {
   }
 };
 
-export const query = async (sql, params) => {
+const query = async (sql, params) => {
   let conn;
   try {
     conn = await pool.getConnection();
@@ -35,5 +41,9 @@ export const query = async (sql, params) => {
   }
 };
 
-export default pool;
+module.exports = {
+  pool,
+  getConnection,
+  query,
+};
 
