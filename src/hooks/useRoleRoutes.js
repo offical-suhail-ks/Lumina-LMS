@@ -15,6 +15,9 @@ function useRoleRoutes(role) {
     if (role === 'parent') {
       return ['/dashboard', '/profile', '/calendar', '/fees'];
     }
+    if (role === 'accounting') {
+      return ['/dashboard', '/accounting/tasks', '/accounting/salaries'];
+    }
     return ['/login'];
   }, [role]);
 }

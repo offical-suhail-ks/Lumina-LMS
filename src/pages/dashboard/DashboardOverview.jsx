@@ -2,11 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { listCourses } from '../../services/courseService';
 import { listAssignments } from '../../services/assignmentService';
+import { getStudentAttendanceSummary } from '../../services/attendanceService';
 
 const DashboardOverview = () => {
   const user = useSelector(state => state.auth.user);
   const [courses, setCourses] = useState([]);
   const [assignments, setAssignments] = useState([]);
+  const [attendanceSummary, setAttendanceSummary] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -18,6 +20,26 @@ const DashboardOverview = () => {
         ]);
         setCourses(coursesData);
         setAssignments(assignmentsData);
+        
+        // Fetch attendance summary if user is a student
+        if (user?.id && user?.role === 'student') {
+          try {
+            const summary = await getStudentAttendanceSummary(user.id);
+            console.log('Attendance summary:', summary);
+            setAttendanceSummary(summary);
+          } catch (error) {
+            console.error('Error fetching attendance summary:', error);
+            // Set default empty summary on error
+            setAttendanceSummary({
+              totalClasses: 0,
+              present: 0,
+              absent: 0,
+              late: 0,
+              excused: 0,
+              attendancePercentage: 0,
+            });
+          }
+        }
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
       } finally {
@@ -26,7 +48,7 @@ const DashboardOverview = () => {
     };
 
     fetchData();
-  }, []);
+  }, [user?.id]);
 
   // Calculate metrics from real data
   const activeCourses = courses.filter(c => {
@@ -53,18 +75,28 @@ const DashboardOverview = () => {
 
   // Calculate average grade from actual submissions
   const calculateAverageGrade = () => {
+    if (!user?.id) {
+      return { avg: 'N/A', trend: 'Not logged in' };
+    }
+    
     const gradedSubmissions = [];
     assignments.forEach(assignment => {
-      if (assignment.submissions) {
+      if (assignment.submissions && Array.isArray(assignment.submissions)) {
         assignment.submissions.forEach(submission => {
-          if (submission.studentId === user?.id && submission.grade !== null && submission.grade !== undefined) {
-            gradedSubmissions.push(parseFloat(submission.grade));
+          // Check if this submission belongs to the current student
+          if (submission.studentId === user.id && submission.grade !== null && submission.grade !== undefined) {
+            const grade = parseFloat(submission.grade);
+            if (!isNaN(grade)) {
+              gradedSubmissions.push(grade);
+            }
           }
         });
       }
     });
     
-    if (gradedSubmissions.length === 0) return { avg: 'N/A', trend: 'No grades yet' };
+    if (gradedSubmissions.length === 0) {
+      return { avg: 'N/A', trend: 'No grades yet' };
+    }
     
     const average = (gradedSubmissions.reduce((sum, grade) => sum + grade, 0) / gradedSubmissions.length).toFixed(1);
     return { avg: `${average}%`, trend: `${gradedSubmissions.length} graded` };
@@ -77,6 +109,28 @@ const DashboardOverview = () => {
   // Learning streak (mock for now)
   const learningStreak = '12 days';
   const streakMessage = 'Keep it up!';
+
+  // Use monthly data if available, otherwise fall back to all-time
+  const monthlyData = attendanceSummary?.monthly;
+  const attendanceValue = monthlyData && monthlyData.expectedClasses > 0
+    ? `${monthlyData.attendancePercentage}%`
+    : monthlyData && monthlyData.totalClasses > 0
+    ? `${monthlyData.attendancePercentage}%`
+    : attendanceSummary && attendanceSummary.totalClasses > 0
+    ? `${attendanceSummary.attendancePercentage}%`
+    : attendanceSummary && attendanceSummary.totalClasses === 0
+    ? '0%'
+    : 'N/A';
+  
+  const attendanceTrend = monthlyData && monthlyData.expectedClasses > 0
+    ? `${monthlyData.present + monthlyData.late + monthlyData.excused}/${monthlyData.expectedClasses} this month`
+    : monthlyData && monthlyData.totalClasses > 0
+    ? `${monthlyData.present + monthlyData.late + monthlyData.excused}/${monthlyData.totalClasses} this month`
+    : attendanceSummary && attendanceSummary.totalClasses > 0
+    ? `${attendanceSummary.present}/${attendanceSummary.totalClasses} classes`
+    : attendanceSummary && attendanceSummary.totalClasses === 0
+    ? 'No classes yet'
+    : 'No data';
 
   const metrics = [
     { 
@@ -96,6 +150,12 @@ const DashboardOverview = () => {
       value: avgGrade, 
       trend: gradeTrend, 
       accent: 'from-emerald-500 to-emerald-400' 
+    },
+    { 
+      label: 'Attendance', 
+      value: attendanceValue, 
+      trend: attendanceTrend, 
+      accent: 'from-purple-500 to-purple-400' 
     },
     { 
       label: 'Learning streak', 

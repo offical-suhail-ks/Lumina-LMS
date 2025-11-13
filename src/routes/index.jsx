@@ -16,6 +16,7 @@ import DashboardOverview from '../pages/dashboard/DashboardOverview';
 import AdminDashboard from '../pages/dashboard/AdminDashboard';
 import FacultyDashboard from '../pages/dashboard/FacultyDashboard';
 import ParentDashboard from '../pages/dashboard/ParentDashboard';
+import AccountingDashboard from '../pages/dashboard/AccountingDashboard';
 import ManageStudents from '../pages/admin/ManageStudents';
 import ManageFaculty from '../pages/admin/ManageFaculty';
 import ManageCourses from '../pages/admin/ManageCourses';
@@ -47,6 +48,12 @@ import StudySchedule from '../pages/students/StudySchedule';
 import ResourcesLibrary from '../pages/students/ResourcesLibrary';
 import CourseModules from '../pages/students/CourseModules';
 import ManageModules from '../pages/faculty/ManageModules';
+import AccountingTasks from '../pages/accounting/AccountingTasks';
+import AccountingSalaries from '../pages/accounting/AccountingSalaries';
+import ManageAccounting from '../pages/admin/ManageAccounting';
+import ReviewApplications from '../pages/admin/ReviewApplications';
+import ViewAttendance from '../pages/admin/ViewAttendance';
+import TakeAttendance from '../pages/faculty/TakeAttendance';
 
 const AppRoutes = () => {
   const dispatch = useDispatch();
@@ -60,6 +67,8 @@ const AppRoutes = () => {
         return <FacultyDashboard />;
       case 'parent':
         return <ParentDashboard />;
+      case 'accounting':
+        return <AccountingDashboard />;
       default:
         return <DashboardOverview />;
     }
@@ -188,6 +197,34 @@ const AppRoutes = () => {
             <Route
               path="admin/fees"
               element={user?.role === 'admin' ? <ManageFees /> : <Navigate to="/dashboard" replace />}
+            />
+            <Route
+              path="admin/accounting"
+              element={user?.role === 'admin' ? <ManageAccounting /> : <Navigate to="/dashboard" replace />}
+            />
+            <Route
+              path="admin/review-applications"
+              element={user?.role === 'admin' ? <ReviewApplications /> : <Navigate to="/dashboard" replace />}
+            />
+            <Route
+              path="admin/attendance"
+              element={user?.role === 'admin' ? <ViewAttendance /> : <Navigate to="/dashboard" replace />}
+            />
+            <Route
+              path="faculty/attendance"
+              element={user?.role === 'faculty' ? <TakeAttendance /> : <Navigate to="/dashboard" replace />}
+            />
+            <Route
+              path="accounting/tasks"
+              element={user?.role === 'accounting' ? <AccountingTasks /> : <Navigate to="/dashboard" replace />}
+            />
+            <Route
+              path="accounting/salaries"
+              element={user?.role === 'accounting' ? <AccountingSalaries /> : <Navigate to="/dashboard" replace />}
+            />
+            <Route
+              path="accounting/fees"
+              element={user?.role === 'accounting' ? <ManageFees /> : <Navigate to="/dashboard" replace />}
             />
       </Route>
 

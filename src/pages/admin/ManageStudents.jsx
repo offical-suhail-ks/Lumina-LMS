@@ -18,15 +18,12 @@ const emptyForm = {
   courseId: '',
   year: '',
   cohort: '',
-  courseFee: '',
-  paymentPlan: '',
-  numberOfInstallments: '',
-  paymentPlanDetails: '',
-  feeDueDate: '',
-  sendReminder: true,
+  batchTiming: '',
+  classSchedule: '',
   guardianName: '',
   guardianEmail: '',
   guardianPhone: '',
+  adminRemarks: '',
 };
 
 const YEAR_OPTIONS = ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year', 'Graduate'];
@@ -45,7 +42,6 @@ const ManageStudents = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingCourses, setIsLoadingCourses] = useState(true);
   const [error, setError] = useState(null);
-  const [sendOfferLetter, setSendOfferLetter] = useState(true);
 
   const guardian = useMemo(
     () => ({
@@ -88,7 +84,6 @@ const ManageStudents = () => {
 
   const resetForm = () => {
     setForm(emptyForm);
-    setSendOfferLetter(true);
     setError(null);
   };
 
@@ -121,14 +116,10 @@ const ManageStudents = () => {
       courseId: form.courseId || null,
       year: form.year || null,
       cohort: form.cohort || null,
-      courseFee: form.courseFee ? parseFloat(form.courseFee) : null,
-      paymentPlan: form.paymentPlan || null,
-      paymentPlanDetails: form.paymentPlanDetails || null,
-      numberOfInstallments: form.numberOfInstallments || null,
-      feeDueDate: form.feeDueDate || null,
-      sendReminder: form.sendReminder !== undefined ? form.sendReminder : true,
+      batchTiming: form.batchTiming || null,
+      classSchedule: form.classSchedule || null,
       guardian,
-      sendOfferLetter: !form.id && sendOfferLetter,
+      adminRemarks: form.adminRemarks || null,
     };
 
     try {
@@ -163,15 +154,12 @@ const ManageStudents = () => {
       courseId: student.courseId ?? '',
       year: student.year ?? '',
       cohort: student.cohort ?? '',
-      courseFee: student.courseFee != null && student.courseFee !== undefined ? (student.courseFee === 0 ? '0' : String(student.courseFee)) : '',
-      paymentPlan: student.paymentPlan ?? '',
-      paymentPlanDetails: student.paymentPlanDetails ?? '',
-      numberOfInstallments: '',
-      feeDueDate: student.feeDueDate ?? '',
-      sendReminder: student.sendReminder !== undefined ? student.sendReminder : true,
+      batchTiming: student.batchTiming ?? '',
+      classSchedule: student.classSchedule ?? '',
       guardianName: student.guardian?.name ?? '',
       guardianEmail: student.guardian?.email ?? '',
       guardianPhone: student.guardian?.phone ?? '',
+      adminRemarks: '',
     });
     setError(null);
   };
@@ -374,137 +362,55 @@ const ManageStudents = () => {
             </div>
           </fieldset>
 
-          {/* Fee Information */}
+          {/* Batch and Schedule Information */}
           <fieldset className="rounded-2xl border border-slate-200/80 bg-white/70 px-4 py-4">
-            <legend className="px-2 text-xs font-semibold uppercase tracking-[0.2em] text-indigo-500">Fee Information</legend>
+            <legend className="px-2 text-xs font-semibold uppercase tracking-[0.2em] text-indigo-500">Batch & Schedule</legend>
             <div className="mt-2 grid gap-4 sm:grid-cols-2">
               <label className="text-sm font-medium text-slate-600">
-                Course Fee *
-                <div className="mt-2 flex items-center gap-2">
-                  <span className="text-slate-500">$</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none ring-offset-1 transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
-                    value={form.courseFee ?? ''}
-                    onChange={event => {
-                      const fee = event.target.value;
-                      setForm(prev => {
-                        let details = prev.paymentPlanDetails;
-                        // Recalculate installment details if payment plan is installment
-                        if (prev.paymentPlan === 'installment' && fee && prev.numberOfInstallments) {
-                          const feeNum = parseFloat(fee);
-                          const numInstallments = parseInt(prev.numberOfInstallments, 10);
-                          if (!isNaN(feeNum) && !isNaN(numInstallments) && numInstallments > 0) {
-                            const installmentAmount = (feeNum / numInstallments).toFixed(2);
-                            details = `${numInstallments} installments of $${installmentAmount} each, due monthly`;
-                          }
-                        }
-                        return { ...prev, courseFee: fee, paymentPlanDetails: details };
-                      });
-                    }}
-                    placeholder="0.00"
-                  />
-                </div>
-                <p className="mt-1 text-xs text-slate-400">Always visible for editing student fee information</p>
-              </label>
-              <label className="text-sm font-medium text-slate-600">
-                Payment Plan
+                Batch Timing
                 <select
                   className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none ring-offset-1 transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
-                  value={form.paymentPlan}
-                  onChange={event => setForm(prev => ({ ...prev, paymentPlan: event.target.value }))}
+                  value={form.batchTiming}
+                  onChange={event => setForm(prev => ({ ...prev, batchTiming: event.target.value }))}
                 >
-                  <option value="">Select payment plan</option>
-                  {PAYMENT_PLAN_OPTIONS.map(plan => (
-                    <option key={plan.value} value={plan.value}>
-                      {plan.label}
-                    </option>
-                  ))}
+                  <option value="">Select batch timing</option>
+                  <option value="morning">Morning Batch</option>
+                  <option value="afternoon">Afternoon Batch</option>
+                  <option value="regular">Regular Batch</option>
                 </select>
               </label>
-              {form.paymentPlan === 'installment' && (
-                <>
-                  <label className="text-sm font-medium text-slate-600">
-                    Number of Installments
-                    <input
-                      type="number"
-                      min="2"
-                      max="12"
-                      className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none ring-offset-1 transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
-                      value={form.numberOfInstallments}
-                      onChange={event => {
-                        const installments = event.target.value;
-                        setForm(prev => {
-                          let details = '';
-                          if (installments && prev.courseFee) {
-                            const fee = parseFloat(prev.courseFee);
-                            const numInstallments = parseInt(installments, 10);
-                            if (!isNaN(fee) && !isNaN(numInstallments) && numInstallments > 0) {
-                              const installmentAmount = (fee / numInstallments).toFixed(2);
-                              details = `${numInstallments} installments of $${installmentAmount} each, due monthly`;
-                            }
-                          }
-                          return { ...prev, numberOfInstallments: installments, paymentPlanDetails: details };
-                        });
-                      }}
-                      placeholder="e.g., 4"
-                    />
-                  </label>
-                  <label className="text-sm font-medium text-slate-600">
-                    Installment Details (Auto-calculated)
-                    <textarea
-                      rows="3"
-                      readOnly
-                      className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none ring-offset-1"
-                      value={form.paymentPlanDetails}
-                      placeholder="Will be calculated automatically based on fee and number of installments"
-                    />
-                  </label>
-                </>
-              )}
-              {form.paymentPlan === 'scholarship' && (
-                <label className="text-sm font-medium text-slate-600 sm:col-span-2">
-                  Scholarship Details
-                  <textarea
-                    rows="3"
-                    className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none ring-offset-1 transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
-                    value={form.paymentPlanDetails}
-                    onChange={event => setForm(prev => ({ ...prev, paymentPlanDetails: event.target.value }))}
-                    placeholder="e.g., Merit Scholarship - 50% tuition waiver"
-                  />
-                </label>
-              )}
+              <label className="text-sm font-medium text-slate-600">
+                Class Schedule
+                <select
+                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none ring-offset-1 transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                  value={form.classSchedule}
+                  onChange={event => setForm(prev => ({ ...prev, classSchedule: event.target.value }))}
+                >
+                  <option value="">Select schedule</option>
+                  <option value="daily">Daily Class (Mon-Fri)</option>
+                  <option value="weekend">Weekend Class (Sat-Sun)</option>
+                  <option value="mwf">MWF (Monday, Wednesday, Friday)</option>
+                  <option value="tts">TTS (Tuesday, Thursday, Saturday)</option>
+                </select>
+              </label>
             </div>
           </fieldset>
 
-          {/* Fee Due Date */}
-          {form.courseFee && parseFloat(form.courseFee) > 0 && (
+          {/* Remarks for Accounting Team */}
+          {!form.id && (
             <fieldset className="rounded-2xl border border-slate-200/80 bg-white/70 px-4 py-4">
-              <legend className="px-2 text-xs font-semibold uppercase tracking-[0.2em] text-indigo-500">Payment Due Date</legend>
-              <div className="mt-2 grid gap-4 sm:grid-cols-2">
+              <legend className="px-2 text-xs font-semibold uppercase tracking-[0.2em] text-indigo-500">Remarks for Accounting Team</legend>
+              <div className="mt-2">
                 <label className="text-sm font-medium text-slate-600">
-                  Fee Payment Due Date
-                  <input
-                    type="date"
+                  Additional Notes (Optional)
+                  <textarea
+                    rows="3"
                     className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none ring-offset-1 transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
-                    value={form.feeDueDate}
-                    onChange={event => setForm(prev => ({ ...prev, feeDueDate: event.target.value }))}
+                    value={form.adminRemarks}
+                    onChange={event => setForm(prev => ({ ...prev, adminRemarks: event.target.value }))}
+                    placeholder="Add any special instructions or notes about fee setup for the accounting team..."
                   />
-                  <p className="mt-1 text-xs text-slate-400">Set the deadline for fee payment</p>
-                </label>
-                <label className="flex items-start gap-3 text-sm font-medium text-slate-600">
-                  <input
-                    type="checkbox"
-                    className="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                    checked={form.sendReminder}
-                    onChange={event => setForm(prev => ({ ...prev, sendReminder: event.target.checked }))}
-                  />
-                  <div>
-                    <span>Send payment reminders</span>
-                    <p className="mt-1 text-xs text-slate-400">Automatically send reminder emails before due date</p>
-                  </div>
+                  <p className="mt-1 text-xs text-slate-400">These remarks will be sent to the accounting team along with the student application</p>
                 </label>
               </div>
             </fieldset>
@@ -526,15 +432,6 @@ const ManageStudents = () => {
                     required
                   />
                   <p className="mt-1 text-xs text-slate-400">This password will be sent to the student via email</p>
-                </label>
-                <label className="mt-4 flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={sendOfferLetter}
-                    onChange={e => setSendOfferLetter(e.target.checked)}
-                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                  />
-                  <span className="text-sm text-slate-600">Send offer letter with login credentials via email</span>
                 </label>
               </div>
             </fieldset>
@@ -578,7 +475,18 @@ const ManageStudents = () => {
             disabled={isSubmitting}
             className="flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-600/30 transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:bg-indigo-400"
           >
-            {isSubmitting ? 'Saving...' : form.id ? 'Update student' : 'Create student & send offer letter'}
+            {isSubmitting ? (
+              'Saving...'
+            ) : form.id ? (
+              'Update student'
+            ) : (
+              <>
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+                Forward to Accounting Team
+              </>
+            )}
           </button>
         </form>
 
@@ -630,25 +538,66 @@ const ManageStudents = () => {
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-3">
                     {student.courseId ? (
-                      <p className="text-xs text-indigo-600">
-                        📚 {courses.find(c => c.id === student.courseId)?.title || courses.find(c => c.id === student.courseId)?.name || 'Course'}
+                      <p className="flex items-center gap-1 text-xs text-indigo-600">
+                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                        </svg>
+                        {courses.find(c => c.id === student.courseId)?.title || courses.find(c => c.id === student.courseId)?.name || 'Course'}
                       </p>
                     ) : null}
                     {student.year ? (
-                      <p className="text-xs text-purple-600">
-                        📅 {student.year}
+                      <p className="flex items-center gap-1 text-xs text-purple-600">
+                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        {student.year}
                       </p>
                     ) : null}
                     {student.courseFee ? (
-                      <p className="text-xs text-emerald-600">
-                        💰 ${parseFloat(student.courseFee).toLocaleString()}
+                      <p className="flex items-center gap-1 text-xs text-emerald-600">
+                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        ${parseFloat(student.courseFee).toLocaleString()}
                       </p>
                     ) : null}
                     {student.paymentPlan ? (
-                      <p className="text-xs text-blue-600">
-                        💳 {PAYMENT_PLAN_OPTIONS.find(p => p.value === student.paymentPlan)?.label || student.paymentPlan}
+                      <p className="flex items-center gap-1 text-xs text-blue-600">
+                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                        </svg>
+                        {PAYMENT_PLAN_OPTIONS.find(p => p.value === student.paymentPlan)?.label || student.paymentPlan}
                       </p>
                     ) : null}
+                    {student.applicationStatus && (
+                      <span className={`flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${
+                        student.applicationStatus === 'accepted' ? 'bg-green-100 text-green-700' :
+                        student.applicationStatus === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                        student.applicationStatus === 'fee_setup_pending' ? 'bg-orange-100 text-orange-700' :
+                        student.applicationStatus === 'fee_setup_completed' ? 'bg-blue-100 text-blue-700' :
+                        student.applicationStatus === 'under_review' ? 'bg-purple-100 text-purple-700' :
+                        student.applicationStatus === 'rejected' ? 'bg-red-100 text-red-700' :
+                        'bg-gray-100 text-gray-700'
+                      }`}>
+                        {student.applicationStatus === 'accepted' && (
+                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        )}
+                        {student.applicationStatus === 'pending' && (
+                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        )}
+                        {student.applicationStatus === 'under_review' && (
+                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                        )}
+                        {student.applicationStatus.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                      </span>
+                    )}
                   </div>
                   {student.guardian?.email ? (
                     <p className="mt-1 text-xs text-slate-400">

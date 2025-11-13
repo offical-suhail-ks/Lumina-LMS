@@ -46,8 +46,24 @@ const StudentRoster = () => {
 
   const getEnrolledStudents = () => {
     if (!selectedCourse) return [];
+    
+    // Get students enrolled via course_enrollments table
     const enrolledIds = selectedCourse.enrolled || [];
-    return students.filter(s => enrolledIds.includes(s.id));
+    
+    // Also include students who have this course as their primary course_id
+    const studentsInCourse = students.filter(s => {
+      // Check if enrolled via course_enrollments
+      if (enrolledIds.includes(s.id)) {
+        return true;
+      }
+      // Check if this is their primary course
+      if (s.courseId === selectedCourse.id) {
+        return true;
+      }
+      return false;
+    });
+    
+    return studentsInCourse;
   };
 
   if (loading) {
@@ -131,10 +147,10 @@ const StudentRoster = () => {
                             <p className="text-sm font-semibold text-slate-900">
                               {student.firstName} {student.lastName}
                             </p>
-                            <p className="text-xs text-slate-500">{student.studentId || 'N/A'}</p>
+                            <p className="text-xs text-slate-500">{student.id || 'N/A'}</p>
                           </td>
-                          <td className="py-3 px-4 text-sm text-slate-600">{student.email}</td>
-                          <td className="py-3 px-4 text-sm text-slate-600">{student.year || 'N/A'}</td>
+                          <td className="py-3 px-4 text-sm text-slate-600">{student.email || 'N/A'}</td>
+                          <td className="py-3 px-4 text-sm text-slate-600">{student.year || '-'}</td>
                           <td className="py-3 px-4">
                             <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
                               student.status === 'active'

@@ -1,4 +1,4 @@
-export const ROLES = ['admin', 'faculty', 'student', 'parent'];
+export const ROLES = ['admin', 'faculty', 'student', 'parent', 'accounting'];
 
 export const STATUS_COLORS = {
   completed: 'green-600',
