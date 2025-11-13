@@ -27,7 +27,7 @@
         "db:migrate-password-reset": "node database/migrate-add-password-reset.js"
   },
   "keywords": [],
-  "author": "",
+  "author": "SUHAIL KS",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
