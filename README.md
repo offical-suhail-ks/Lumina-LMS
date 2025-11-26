@@ -371,6 +371,73 @@ LMS/
 - Check file permissions
 - Verify multer configuration
 
+## 🚀 Deployment to Vercel
+
+### Prerequisites
+- GitHub account with repository pushed
+- Vercel account (free tier works)
+- Supabase project with database set up
+
+### Deployment Steps
+
+1. **Connect Repository to Vercel**
+   - Go to [vercel.com](https://vercel.com)
+   - Click "New Project"
+   - Import your GitHub repository
+   - Vercel will auto-detect the configuration
+
+2. **Configure Environment Variables**
+   
+   In Vercel Dashboard → Project Settings → Environment Variables, add:
+   
+   **Frontend Variables:**
+   ```
+   VITE_SUPABASE_URL=https://your-project-ref.supabase.co
+   VITE_SUPABASE_ANON_KEY=your-anon-key-here
+   VITE_API_URL=https://your-app.vercel.app/api
+   ```
+   
+   **Backend Variables:**
+   ```
+   DATABASE_URL=postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres
+   PORT=4000
+   NODE_ENV=production
+   FRONTEND_URL=https://your-app.vercel.app
+   ```
+   
+   (Optional - for email functionality):
+   ```
+   SMTP_HOST=smtp.gmail.com
+   SMTP_PORT=587
+   SMTP_SECURE=false
+   SMTP_USER=your_email@gmail.com
+   SMTP_PASS=your_app_password
+   SMTP_FROM=Lumina LMS <no-reply@lumina.edu>
+   ```
+
+3. **Deploy**
+   - Click "Deploy"
+   - Vercel will build and deploy your application
+   - Your app will be available at `https://your-app.vercel.app`
+
+4. **Update API URL**
+   - After deployment, update `VITE_API_URL` in Vercel environment variables to your Vercel app URL
+   - Redeploy if needed
+
+### How It Works
+
+- **Frontend**: Served as static files from `dist/` directory
+- **Backend API**: Runs as serverless functions at `/api/*` routes
+- **Database**: Uses Supabase PostgreSQL (already hosted)
+- **File Uploads**: Uses Vercel's serverless storage (consider using Supabase Storage for production)
+
+### Important Notes
+
+- All API routes are accessible at `/api/*` (e.g., `/api/students`, `/api/courses`)
+- Frontend automatically proxies API calls to `/api` routes
+- Database connection uses Supabase (no additional setup needed)
+- File uploads may need Supabase Storage for production use
+
 ## 📝 License
 
 ISC License
