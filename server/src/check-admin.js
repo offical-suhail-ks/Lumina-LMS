@@ -51,12 +51,12 @@ async function checkAdmin() {
     }
   } catch (error) {
     console.error('❌ Error:', error.message);
-    if (error.code === 'ER_BAD_DB_ERROR') {
-      console.error('\n💡 Database does not exist. Run: npm run db:init\n');
-    } else if (error.code === 'ER_ACCESS_DENIED_ERROR' || error.code === 'ER_AUTHENTICATION_PLUGIN_NOT_SUPPORTED') {
-      console.error('\n💡 Authentication error. Run: npm run db:fix-auth\n');
-    } else if (error.code === 'ECONNREFUSED') {
-      console.error('\n💡 Cannot connect to MariaDB. Make sure MariaDB is running.\n');
+    if (error.code === '3D000') {
+      console.error('\n💡 Database does not exist. Run: node database/init-postgres.js\n');
+    } else if (error.code === '28P01') {
+      console.error('\n💡 Authentication error. Check your DATABASE_URL in .env file\n');
+    } else if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+      console.error('\n💡 Cannot connect to PostgreSQL. Make sure the database server is running.\n');
     } else {
       console.error('\n💡 Check your database connection in .env file\n');
     }

@@ -91,7 +91,7 @@ app.get('/', (_req, res) => {
     name: 'Lumina LMS API',
     version: '1.0.0',
     uptime: process.uptime(),
-    database: 'MariaDB',
+    database: 'PostgreSQL',
     endpoints: [
       'POST /auth/login',
       'GET /students',
@@ -139,20 +139,35 @@ app.post('/auth/login', async (req, res) => {
     });
   } catch (error) {
     console.error('Login error:', error.message);
+    console.error('Full error:', error);
     if (error.code) {
       console.error(`Error code: ${error.code}`);
     }
-    if (error.code === 'ER_BAD_DB_ERROR') {
+    if (error.stack) {
+      console.error('Stack trace:', error.stack);
+    }
+    // PostgreSQL error codes
+    if (error.code === '3D000') {
       return res.status(500).json({ 
-        message: 'Database not initialized. Please run: npm run db:init' 
+        message: 'Database not initialized. Please run: node database/init-postgres.js' 
       });
     }
-    if (error.code === 'ER_GET_CONNECTION_TIMEOUT' || error.code === 'ER_AUTHENTICATION_PLUGIN_NOT_SUPPORTED') {
+    if (error.code === '28P01' || error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
       return res.status(500).json({ 
         message: 'Database connection failed. Please check your database configuration.' 
       });
     }
-    return res.status(500).json({ message: 'Internal server error' });
+    // Check for column not found errors
+    if (error.message && (error.message.includes('column') || error.message.includes('does not exist'))) {
+      return res.status(500).json({ 
+        message: 'Database schema error. Please run migrations.',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+    return res.status(500).json({ 
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
@@ -232,7 +247,7 @@ app.post('/students', async (req, res) => {
     res.status(201).json(studentResponse);
   } catch (error) {
     console.error('Error creating student:', error);
-    if (error.code === 'ER_DUP_ENTRY') {
+    if (error.code === '23505' || error.code === 'ER_DUP_ENTRY') { // PostgreSQL unique violation or MySQL duplicate
       return res.status(409).json({ message: 'Student with this email already exists' });
     }
     res.status(500).json({ message: 'Failed to create student' });
@@ -312,7 +327,7 @@ app.post('/faculty', async (req, res) => {
     res.status(201).json(facultyResponse);
   } catch (error) {
     console.error('Error creating faculty:', error);
-    if (error.code === 'ER_DUP_ENTRY') {
+    if (error.code === '23505' || error.code === 'ER_DUP_ENTRY') { // PostgreSQL unique violation or MySQL duplicate
       return res.status(409).json({ message: 'Faculty with this email or username already exists' });
     }
     res.status(500).json({ message: 'Failed to create faculty' });
@@ -386,7 +401,7 @@ app.post('/accounting-users', async (req, res) => {
     res.status(201).json(userResponse);
   } catch (error) {
     console.error('Error creating accounting user:', error);
-    if (error.code === 'ER_DUP_ENTRY') {
+    if (error.code === '23505' || error.code === 'ER_DUP_ENTRY') { // PostgreSQL unique violation or MySQL duplicate
       return res.status(409).json({ message: 'Accounting user with this email or username already exists' });
     }
     res.status(500).json({ message: 'Failed to create accounting user' });
@@ -553,7 +568,7 @@ app.post('/courses/:courseId/enroll', async (req, res) => {
     res.status(201).json({ message: 'Successfully enrolled in course' });
   } catch (error) {
     console.error('Error enrolling in course:', error);
-    if (error.code === 'ER_DUP_ENTRY') {
+    if (error.code === '23505' || error.code === 'ER_DUP_ENTRY') { // PostgreSQL unique violation or MySQL duplicate
       return res.status(409).json({ message: 'Already enrolled in this course' });
     }
     res.status(500).json({ message: 'Failed to enroll in course' });
@@ -569,7 +584,7 @@ app.delete('/courses/:courseId/enroll/:studentId', async (req, res) => {
       [courseId, studentId]
     );
 
-    if (result.affectedRows === 0) {
+    if (!result.affectedRows || result.affectedRows === 0) {
       return res.status(404).json({ message: 'Enrollment not found' });
     }
 
@@ -2216,7 +2231,19 @@ function convertToCSV(data) {
   return [headers.join(','), ...rows].join('\n');
 }
 
+// Global error handler middleware (must be after all routes)
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  if (!res.headersSent) {
+    res.status(500).json({ 
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 Lumina LMS API running on http://localhost:${PORT}`);
-  console.log(`📊 Using MariaDB database: ${process.env.DB_NAME || 'lms_platform'}`);
+  const dbName = process.env.DB_NAME || (process.env.DATABASE_URL ? 'Supabase PostgreSQL' : 'postgres');
+  console.log(`📊 Using PostgreSQL database: ${dbName}`);
 });

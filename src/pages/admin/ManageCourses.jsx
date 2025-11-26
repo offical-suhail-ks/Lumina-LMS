@@ -105,9 +105,9 @@ const ManageCourses = () => {
       description: course.description ?? '',
       instructor: course.instructor ?? '',
       department: course.department ?? '',
-      startDate: course.startDate ?? '',
-      endDate: course.endDate ?? '',
-      totalYears: course.totalYears ?? '',
+      startDate: course.startDate ?? course.start_date ?? '',
+      endDate: course.endDate ?? course.end_date ?? '',
+      totalYears: course.totalYears ?? course.total_years ?? '',
       tags: Array.isArray(course.tags) ? course.tags.join(', ') : '',
       capacity: course.capacity ?? 30,
     });

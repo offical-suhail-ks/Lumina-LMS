@@ -539,7 +539,7 @@ const AccountingTasks = () => {
                   </svg>
                   Cancel
                 </button>
-                {selectedTask.status !== 'completed' && selectedTask.status !== 'in_progress' && (
+                {selectedTask.status !== 'completed' && selectedTask.status !== 'cancelled' && (
                   <button
                     onClick={handleSendToAdmin}
                     className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500"
@@ -547,7 +547,18 @@ const AccountingTasks = () => {
                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                     </svg>
-                    Send to Admin for Review
+                    {selectedTask.status === 'in_progress' ? 'Send Back to Admin' : 'Send to Admin for Review'}
+                  </button>
+                )}
+                {selectedTask.status === 'in_progress' && (
+                  <button
+                    onClick={handleCompleteTask}
+                    className="flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-green-500"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Complete Task
                   </button>
                 )}
               </div>

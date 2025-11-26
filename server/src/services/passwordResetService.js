@@ -10,7 +10,7 @@ const passwordResetService = {
     let [user] = await query(
       `SELECT id, email, name, 'user' as type FROM users WHERE email = ?
        UNION
-       SELECT id, email, CONCAT(first_name, ' ', last_name) as name, 'student' as type FROM students WHERE email = ?`,
+       SELECT id, email, (first_name || ' ' || last_name) as name, 'student' as type FROM students WHERE email = ?`,
       [email, email]
     );
 
@@ -24,21 +24,26 @@ const passwordResetService = {
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + 1); // Token expires in 1 hour
 
-    // Store reset token
-    await query(
-      `INSERT INTO password_reset_tokens (id, user_id, user_type, token, expires_at)
-       VALUES (?, ?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE token = ?, expires_at = ?`,
-      [
-        `reset-${uuid()}`,
-        user.id,
-        user.type,
-        resetToken,
-        expiresAt,
-        resetToken,
-        expiresAt,
-      ]
+    // Check if a token already exists for this user
+    const [existingToken] = await query(
+      `SELECT id FROM password_reset_tokens WHERE user_id = ? AND user_type = ?`,
+      [user.id, user.type]
     );
+
+    if (existingToken) {
+      // Update existing token
+      await query(
+        `UPDATE password_reset_tokens SET token = ?, expires_at = ?, used = FALSE WHERE id = ?`,
+        [resetToken, expiresAt, existingToken.id]
+      );
+    } else {
+      // Insert new token
+      await query(
+        `INSERT INTO password_reset_tokens (id, user_id, user_type, token, expires_at)
+         VALUES (?, ?, ?, ?, ?)`,
+        [`reset-${uuid()}`, user.id, user.type, resetToken, expiresAt]
+      );
+    }
 
     // Send reset email
     try {

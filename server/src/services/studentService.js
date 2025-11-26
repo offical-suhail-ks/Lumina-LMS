@@ -261,7 +261,7 @@ const studentService = {
 
   async delete(id) {
     const result = await query('DELETE FROM students WHERE id = ?', [id]);
-    return result.affectedRows > 0;
+    return (result.affectedRows || result.rowCount || 0) > 0;
   },
 };
 

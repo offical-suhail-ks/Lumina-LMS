@@ -132,7 +132,20 @@ const ManageStudents = () => {
       resetForm();
     } catch (error) {
       console.error(error);
-      setError('Unable to save student. Please try again.');
+      // Show more specific error messages
+      if (error.message) {
+        setError(error.message);
+      } else if (error.code === '23505') {
+        setError('A student with this email or username already exists.');
+      } else if (error.code === '23503') {
+        if (error.message && error.message.includes('course_id')) {
+          setError('The selected course does not exist. Please select a valid course or leave it empty.');
+        } else {
+          setError('Invalid reference. Please check your input and try again.');
+        }
+      } else {
+        setError('Unable to save student. Please try again.');
+      }
     } finally {
       setIsSubmitting(false);
     }

@@ -22,13 +22,22 @@ const ReviewApplications = () => {
 
   const fetchTasks = async () => {
     try {
-      const data = await getAccountingTasks({ status: 'in_progress' });
-      // Also get tasks for students with under_review status
+      // Get all tasks and filter for those that need admin review
+      // Tasks sent from accounting will have status 'pending' (after sendTaskToAdmin)
+      // or 'in_progress' (if they were already in progress)
+      // We want to show tasks that are ready for admin review
       const allTasks = await getAccountingTasks();
-      const reviewTasks = allTasks.filter(t => 
-        t.applicationStatus === 'under_review' || 
-        t.status === 'in_progress'
-      );
+      const reviewTasks = allTasks.filter(t => {
+        // Show tasks that:
+        // 1. Have student application_status as 'under_review', OR
+        // 2. Have task status as 'pending' (sent from accounting), OR
+        // 3. Have task status as 'in_progress' (already in review)
+        return (
+          t.applicationStatus === 'under_review' || 
+          t.status === 'pending' ||
+          t.status === 'in_progress'
+        );
+      });
       setTasks(reviewTasks);
     } catch (error) {
       console.error('Error fetching tasks:', error);
@@ -39,6 +48,9 @@ const ReviewApplications = () => {
 
   const filterTasks = () => {
     if (statusFilter === 'all') {
+      setFilteredTasks(tasks);
+    } else if (statusFilter === 'under_review') {
+      // Show all tasks that are ready for review (regardless of task status)
       setFilteredTasks(tasks);
     } else {
       setFilteredTasks(tasks.filter(t => t.applicationStatus === statusFilter));

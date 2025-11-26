@@ -1,4 +1,4 @@
-const { query } = require('../config/database');
+const { query } = require('../db');
 const { v4: uuidv4 } = require('uuid');
 
 const featureFlagService = {
