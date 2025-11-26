@@ -2242,8 +2242,15 @@ app.use((err, req, res, next) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 Lumina LMS API running on http://localhost:${PORT}`);
-  const dbName = process.env.DB_NAME || (process.env.DATABASE_URL ? 'Supabase PostgreSQL' : 'postgres');
-  console.log(`📊 Using PostgreSQL database: ${dbName}`);
-});
+// Export for Vercel serverless
+module.exports = app;
+
+// For local development
+if (require.main === module) {
+  const PORT = process.env.PORT || 4000;
+  app.listen(PORT, () => {
+    console.log(`🚀 Lumina LMS API running on http://localhost:${PORT}`);
+    const dbName = process.env.DB_NAME || (process.env.DATABASE_URL ? 'Supabase PostgreSQL' : 'postgres');
+    console.log(`📊 Using PostgreSQL database: ${dbName}`);
+  });
+}
