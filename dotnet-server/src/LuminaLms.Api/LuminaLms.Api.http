@@ -1,0 +1,16 @@
+@LuminaLms.Api_HostAddress = http://localhost:5245
+
+GET {{LuminaLms.Api_HostAddress}}/
+Accept: application/json
+
+###
+
+POST {{LuminaLms.Api_HostAddress}}/auth/login
+Content-Type: application/json
+
+{
+  "identifier": "admin",
+  "password": "admin"
+}
+
+###
