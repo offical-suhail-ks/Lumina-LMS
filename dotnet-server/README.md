@@ -1,155 +1,293 @@
-# Lumina LMS API — ASP.NET Core port
+# Lumina LMS API
 
-A full port of the Node/Express (`server/`) backend to ASP.NET Core 8 + EF Core,
-targeting the same PostgreSQL/Supabase database. 95 routes / 119 operations
-across every module of the original API (auth, students, faculty, accounting,
-courses, assignments, attendance, payments, mailbox, quizzes, forum,
-certificates, notifications, analytics, videos, achievements, activity logs,
-feature flags, export).
+ASP.NET Core 8 + EF Core backend for Lumina LMS — a full port of the original
+Node/Express backend (`server/`), rebuilt on Postgres (Neon) with real
+authentication, feature-folder architecture, and several source-app bugs fixed
+rather than carried over. 118/118 original routes covered, plus one addition.
 
-## Solution layout
+```
+POST /auth/login          →  { token, user }        JWT, not the source app's fake uuid() token
+GET  /students             →  401 without a Bearer token — the source app never actually enforced this
+```
+
+---
+
+## Contents
+
+- [Architecture](#architecture)
+- [Project structure](#project-structure)
+- [Getting started](#getting-started)
+- [Configuration reference](#configuration-reference)
+- [Database](#database)
+- [Running](#running)
+- [Adding a new feature module](#adding-a-new-feature-module)
+- [Conventions](#conventions)
+- [Behavioral differences from the source Node app](#behavioral-differences-from-the-source-node-app)
+- [Not ported](#not-ported)
+- [Verification performed](#verification-performed)
+
+---
+
+## Architecture
+
+Four projects, standard clean-architecture dependency direction
+(`Api → Infrastructure → Application → Domain`, arrows meaning "depends on"):
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ LuminaLms.Api            controllers, Program.cs, appsettings   │
+├─────────────────────────────────────────────────────────────────┤
+│ LuminaLms.Infrastructure  EF Core, JWT, BCrypt, SMTP, file I/O   │
+│                           — implements Application's interfaces │
+├─────────────────────────────────────────────────────────────────┤
+│ LuminaLms.Application     DTOs + service interfaces + auth       │
+│                           contracts — no EF Core, no HTTP        │
+├─────────────────────────────────────────────────────────────────┤
+│ LuminaLms.Domain          entities + enums — no dependencies     │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+Within `Application` and `Infrastructure`, code is organized by **feature**,
+not by technical type. Everything about payments — the DTOs, the service
+interface, the service implementation — lives under a `Payments/` folder in
+each project, not scattered across generic `Dtos/`, `Services/` folders. This
+is what makes ~20 modules navigable instead of three folders of 20+ flat files.
+
+Controllers mirror the same feature folders for consistency, though that's
+purely organizational — ASP.NET Core discovers controllers by reflection, so
+folder location never affects routing.
+
+## Project structure
 
 ```
 LuminaLms.sln
+database/
+  consolidated-schema.sql     reference doc — reconciled schema from every
+                               server/database/*.sql script (see Database below)
 src/
-  LuminaLms.Domain          entities + enums, no dependencies
-  LuminaLms.Application     DTOs, service interfaces, auth contracts, JSON-patch/enum helpers
-  LuminaLms.Infrastructure  EF Core DbContext + migrations, service implementations,
-                             JWT/BCrypt/email/file-storage
-  LuminaLms.Api             controllers, Program.cs, appsettings
+  LuminaLms.Domain/
+    Entities/                 40 tables, grouped into ~17 cohesive files
+    Enums/                    27 Postgres enum types as C# enums
+
+  LuminaLms.Application/
+    Auth/                     login, JWT, password hashing, password reset
+    Common/                   JsonPatch, EnumConvert, EmailTemplates,
+                               ScheduleCalculator, cross-cutting interfaces
+    Features/<Domain>/        one folder per module — DTOs + I<X>Service
+    GlobalUsings.cs           makes every Features.* namespace ambient
+
+  LuminaLms.Infrastructure/
+    Auth/                     AuthService, JwtTokenService, BCryptPasswordHasher,
+                               PasswordResetService
+    Email/                    SmtpEmailSender (dev fallback: logs instead of sending)
+    Storage/                  LocalFileStorageService (module/assignment/video uploads)
+    Features/<Domain>/        service implementations, mirrors Application/Features
+    Persistence/
+      LmsDbContext.cs         DbSets + Postgres enum registration
+      LmsDbContextFactory.cs  `dotnet ef` design-time factory
+      NpgsqlEnumMappings.cs   ADO.NET-level enum read/write mapping
+      PostgresConnectionStringHelper.cs   accepts postgres:// URIs or Key=Value
+      DbSeeder.cs             idempotent default accounts + feature flags
+      Configurations/         EF Core fluent config, grouped by related tables
+      Migrations/
+    Options/                  strongly-typed appsettings sections
+    DependencyInjection.cs    single AddInfrastructure() extension method
+    GlobalUsings.cs
+
+  LuminaLms.Api/
+    Controllers/<Domain>/     one folder per module, mirrors Application/Features
+    Common/                   ExceptionHandlingMiddleware, CsvWriter
+    Program.cs
+    appsettings.json          structure only — no secrets committed
+    GlobalUsings.cs
 ```
 
-Business logic lives in `Infrastructure/Services/*Service.cs` behind interfaces
-defined in `Application/Services`. Controllers are thin — they call one service
-method and shape the HTTP response. Simple CRUD (calendar, staff accounts) uses
-the same pattern for consistency rather than talking to `DbContext` directly.
+**Why global usings instead of per-file imports?** With ~20 feature
+namespaces referenced across ~90 files, tracking exactly which of
+`Application.Features.Payments` / `.Quizzes` / `.Students` / etc. each
+controller or service needs is pure friction with no payoff — the whole point
+of a feature namespace is that everything in it belongs together. Each
+project's `GlobalUsings.cs` makes all of them ambient project-wide, the same
+way `ImplicitUsings` already makes `System`, `System.Linq`, etc. ambient.
 
-## Prerequisites
+## Getting started
 
-- .NET 8 SDK (`dotnet --list-sdks` should show `8.0.x`)
-- A PostgreSQL database. This project uses **Neon** (not Supabase — decided
-  during the port; see **Database** below), but any Postgres host works.
+1. **.NET 8 SDK** — `dotnet --list-sdks` should list `8.0.x`.
+2. **A PostgreSQL database.** This project runs on **Neon** (not Supabase —
+   see [Database](#database)), but any Postgres 14+ host works.
+3. Clone, then configure secrets (next section) before running anything.
 
-## Configuration
+## Configuration reference
 
-Nothing sensitive is committed. Set these via `dotnet user-secrets` (recommended
-for local dev) or environment variables (`ConnectionStrings__Postgres`,
-`Jwt__Secret`, etc. — double underscore is .NET's env-var nesting separator).
+Nothing sensitive is committed — `appsettings.json` only has the key
+structure with empty/default values. Configure via `dotnet user-secrets`
+(recommended for local dev) or environment variables:
 
 ```bash
 cd src/LuminaLms.Api
 dotnet user-secrets init
 dotnet user-secrets set "ConnectionStrings:Postgres" "<connection string>"
 dotnet user-secrets set "Jwt:Secret" "<at least 32 random bytes>"
-# optional — omit Smtp:Host to log emails to the console instead of sending
+
+# optional — omit Smtp:Host and emails are logged to the console instead of sent
 dotnet user-secrets set "Smtp:Host" "smtp.example.com"
 dotnet user-secrets set "Smtp:User" "..."
 dotnet user-secrets set "Smtp:Pass" "..."
 ```
 
-The connection string accepts either the classic ADO.NET form
-(`Host=...;Database=...;Username=...;Password=...;SSL Mode=Require`) or a
-`postgres://user:pass@host/db?sslmode=require` URI — hosted providers
-(Neon, Heroku, Railway) usually hand out the URI form, and it's normalized
-automatically (`PostgresConnectionStringHelper`).
+Environment-variable form uses `__` as the nesting separator, e.g.
+`ConnectionStrings__Postgres`, `Jwt__Secret` — same values, useful for CI or
+containers where user-secrets aren't available.
 
 | Key | Purpose | Default |
 |---|---|---|
-| `ConnectionStrings:Postgres` | Npgsql connection string (URI or keyword form) | *(required)* |
+| `ConnectionStrings:Postgres` | Npgsql connection string — accepts either `postgres://user:pass@host/db?sslmode=require` or `Host=...;Database=...;Username=...;Password=...` | *(required)* |
 | `Jwt:Secret` | HMAC-SHA256 signing key for auth tokens | *(required)* |
-| `Jwt:ExpiryMinutes` | Token lifetime | 480 |
-| `Smtp:Host` | SMTP server; omit to log emails to console in dev | *(none — dev fallback)* |
-| `Smtp:FrontendUrl` | Base URL used to build email links (reset-password, fees) | `http://localhost:5173` |
-| `Storage:RootPath` | Local upload directory (module materials, assignments, videos) | `uploads` |
-| `Database:AutoMigrateOnStartup` | Run pending EF migrations on boot | `false` |
-| `Database:SeedOnStartup` | Insert default admin/faculty/accounting users + feature flags if missing (idempotent, safe to leave on) | `false` |
+| `Jwt:Issuer` / `Jwt:Audience` | Token claims | `LuminaLms` |
+| `Jwt:ExpiryMinutes` | Token lifetime | `480` |
+| `Smtp:Host` | SMTP server; omit to log emails to console instead | *(dev fallback)* |
+| `Smtp:FrontendUrl` | Base URL for email links (reset-password, fees) | `http://localhost:5173` |
+| `Storage:RootPath` | Local upload directory | `uploads` |
+| `Database:AutoMigrateOnStartup` | Apply pending EF migrations on boot | `false` |
+| `Database:SeedOnStartup` | Insert default accounts + feature flags if missing (idempotent, safe to leave on) | `false` |
 
 ## Database
 
-**This project no longer uses Supabase.** Partway through the port, the
-decision was made to move off Supabase specifically (keeping Postgres) —
-it now runs against a **Neon** Postgres database. `server/`'s Supabase
-project is unrelated to this backend going forward.
+**This backend runs on Neon, not Supabase.** The Node backend's Supabase
+project (`server/`) is unrelated going forward — that decision was made
+explicitly partway through the port, keeping Postgres but moving providers.
 
-The EF Core model (`src/LuminaLms.Infrastructure/Persistence/Migrations`) and
-`database/consolidated-schema.sql` both describe the same **intended final
-schema** — 40 tables, reconciled from `server/database/schema-postgres.sql`
-plus every `migrate-add-*` script, with several latent bugs fixed along the way
-(see **Behavioral differences** below). `consolidated-schema.sql` is a
-reference document only — the EF Core migration is what actually runs.
+The EF Core model *is* the schema source of truth
+(`src/LuminaLms.Infrastructure/Persistence/Migrations`). `database/consolidated-schema.sql`
+is a **reference document only**, kept for traceability back to the original
+`server/database/*.sql` scripts — reconciled into one coherent 40-table
+schema, with a header documenting several bugs found in the original SQL
+(index-name collisions, missing FKs, tables defined with invalid MySQL syntax
+mixed into Postgres migration files). The EF migration is what actually runs.
 
-Apply the schema to a fresh database with:
+**Apply the schema to a fresh database:**
 
 ```bash
 cd src/LuminaLms.Api
 dotnet ef database update --project ../LuminaLms.Infrastructure --startup-project .
 ```
 
-This creates every table, enum type, index, and FK. It does **not** insert
-seed data — set `Database:SeedOnStartup=true` for one run (or permanently,
-it's idempotent) to insert the default admin/faculty/accounting accounts
-(bcrypt-hashed, unlike the source app's plaintext seed) and the 8 default
-feature-flag rows.
+Creates every table, enum type, index, and FK. Does **not** seed data — set
+`Database:SeedOnStartup=true` for one run (or leave it on permanently, it's
+idempotent) to insert:
+- Default `admin` / `faculty` / `accounting` accounts (bcrypt-hashed — the
+  source app's seed used plaintext `'admin'`, `'faculty'`, `'accounting'`)
+- The 8 default feature-flag rows
 
-### Gotcha hit while wiring this up
+### If you add a 28th Postgres enum
 
-`modelBuilder.HasPostgresEnum<T>("some_name")` binds that single positional
-string to the **schema** parameter, not the enum type name — passing it
-positionally silently created a schema-per-enum (e.g.
-`achievement_type_enum.achievement_type`) instead of a plain
-`public.achievement_type_enum` type, and no `CREATE TYPE` was emitted for the
-name the table columns actually reference. Every enum registration must use
-the named `name:` parameter (`HasPostgresEnum<AchievementType>(name: "achievement_type_enum")`)
-— already fixed in `LmsDbContext.OnModelCreating`, documented here in case you
-add a 28th enum later and hit the same trap.
+`modelBuilder.HasPostgresEnum<T>("some_name")`'s single positional string
+binds to the **schema** parameter, not the enum name — passing it
+positionally silently creates a schema named after your enum instead of a
+plain `public.some_name` type, and no `CREATE TYPE` gets emitted for the name
+your table columns actually reference. Always use the named parameter:
+
+```csharp
+modelBuilder.HasPostgresEnum<MyEnum>(name: "my_enum");   // correct
+modelBuilder.HasPostgresEnum<MyEnum>("my_enum");          // wrong — "my_enum" becomes the schema
+```
+
+Already fixed in `LmsDbContext.OnModelCreating`; documented here because it's
+a silent failure mode (compiles fine, migration generates, `dotnet ef
+database update` fails with a confusing "type does not exist" error on table
+creation) that's easy to reintroduce without knowing the gotcha.
 
 ## Running
 
 ```bash
+# backend
+cd dotnet-server
 dotnet run --project src/LuminaLms.Api
+# → https://localhost:7187 and http://localhost:5245, Swagger UI opens automatically
+
+# frontend (repo root, separate terminal)
+npm run dev
+# → http://localhost:5173 — set VITE_API_URL in .env.local to point at the port above
 ```
 
-Swagger UI is at `/swagger` in Development. The root `/` returns a health payload.
+Seeded accounts (after `Database:SeedOnStartup=true` has run once):
+`admin`/`admin`, `faculty`/`faculty`, `accounting`/`accounting`.
 
-## Authentication
+## Adding a new feature module
 
-Real JWT bearer auth with role claims (`[Authorize(Roles = "admin,faculty")]`
-on controllers) — **this is new**. The source Node app's `authMiddleware` was a
-pass-through stub (`// TODO: Verify JWT token here`) and `/auth/login` returned
-`uuid()` as the "token", so the original API had no actual auth enforcement.
+The pattern is the same in every layer — following it keeps new modules as
+navigable as the existing ones:
 
-Passwords were stored in **plaintext** in the source app. This port hashes new/
-changed passwords with BCrypt and lazily upgrades existing plaintext rows: on
-a successful login where the stored value isn't a bcrypt hash, it's rehashed
-and saved immediately. No bulk backfill migration is needed, but any account
-that's never logged in again post-cutover keeps its plaintext value until it does.
+1. **Domain**: add entity classes to `Domain/Entities/`, enums to `Domain/Enums/`.
+2. **Application**: create `Application/Features/<Name>/`, add `<Name>Dtos.cs`
+   (records/DTOs) and `I<Name>Service.cs` (interface). Add the namespace to
+   `Application/GlobalUsings.cs`.
+3. **Infrastructure**: create `Infrastructure/Features/<Name>/<Name>Service.cs`
+   implementing the interface, using `LmsDbContext` directly (no repository
+   layer — EF Core's `DbContext` already *is* a unit of work). Register it in
+   `DependencyInjection.cs`. Add both namespaces (Application and
+   Infrastructure sides) to `Infrastructure/GlobalUsings.cs`.
+4. **Api**: create `Api/Controllers/<Name>/<Name>Controller.cs` — thin, one
+   call into the service per action. Add the Application namespace to
+   `Api/GlobalUsings.cs`.
+5. If the entity has a new Postgres enum, register it in both
+   `LmsDbContext.OnModelCreating` (`HasPostgresEnum`, **named** `name:`
+   parameter) and `NpgsqlEnumMappings.MapLmsEnums` — then regenerate the
+   migration.
+
+## Conventions
+
+- **Partial updates use `JsonElement`, not typed PATCH DTOs.** System.Text.Json
+  can't distinguish "field omitted" from "field explicitly null" against a
+  plain C# DTO. Several source endpoints depend on that distinction (e.g.
+  editing a student's phone number must never blank out their fee plan just
+  because the request didn't mention it). Controllers bind the raw body as
+  `JsonElement` and services use `JsonPatch`'s `Has()`/`GetString()`/etc.
+  extension methods (`Application/Common/JsonPatch.cs`) to apply only the
+  fields actually present.
+- **Enum strings use snake_case on the wire, matching the original API
+  contract** (`"fee_setup"`, not `"FeeSetup"`). `EnumConvert`
+  (`Application/Common/EnumConvert.cs`) converts between the PascalCase C#
+  enum members and the snake_case strings clients send/receive.
+- **String IDs, not database identities.** Every table's primary key is a
+  client-generated string (`$"student-{Guid.NewGuid()}"`), matching the
+  source app's convention — `.ValueGeneratedNever()` on every entity
+  configuration. Kept deliberately rather than switched to native
+  `uniqueidentifier`/`int` to avoid a second, unrelated migration decision
+  bundled into this port.
+- **No repository/unit-of-work abstraction.** Services take `LmsDbContext`
+  directly. Multi-statement writes that need to be atomic are wrapped in
+  explicit `_db.Database.BeginTransactionAsync()` blocks rather than hidden
+  behind a generic abstraction.
 
 ## Behavioral differences from the source Node app
 
 Fixed rather than ported, since they're bugs, not intended behavior:
 
-- **Plaintext passwords** → BCrypt with lazy-migration (above).
-- **No real auth** → JWT bearer + role-based `[Authorize]`.
+- **Plaintext passwords** → BCrypt, with lazy migration: on a successful
+  login where the stored value isn't a bcrypt hash, it's rehashed and saved
+  immediately. No bulk backfill needed.
+- **No real auth enforcement** — the source `authMiddleware` was a
+  pass-through stub and `/auth/login` returned `uuid()` as the "token" → real
+  JWT bearer auth with role-based `[Authorize]` on every controller.
 - **MySQL syntax that doesn't run on Postgres**: `CURDATE()`, `DATE_SUB(...)`,
   `ON DUPLICATE KEY UPDATE` in `certificateService`, `analyticsService`,
-  `mailboxService`, `quizService`, `videoService` — replaced with correct
-  Postgres/EF Core equivalents.
+  `mailboxService`, `quizService`, `videoService` → correct Postgres/EF Core
+  equivalents.
 - **`quiz_answers` had no unique constraint** on `(attempt_id, question_id)`
-  despite the app needing upsert semantics — added, so answer resubmission is
-  a real `ON CONFLICT`-style update instead of accumulating duplicate rows.
-- **Mailbox announcement targeting bug**: the source compared a singular role
-  (`"student"`) directly against the plural `announcement_audience` enum
-  (`"students"`), so role-targeted announcements could never match. Fixed via
-  an explicit role→audience mapping.
-- **N+1 queries** (`courseService.getAll`, `assignmentService.getAll`,
-  `moduleService.getAllByCourse`, `quizService.getQuestionsByQuiz`) → single
+  despite needing upsert semantics → added, so answer resubmission is a real
+  update instead of accumulating duplicate rows.
+- **Mailbox announcement targeting bug**: source compared the singular role
+  string (`"student"`) directly against the plural `announcement_audience`
+  enum (`"students"`), so role-targeted announcements could never match →
+  explicit role→audience mapping.
+- **N+1 queries** (courses, assignments, modules, quiz questions) → single
   queries with `Include()`.
-- **Un-transacted multi-statement writes** (`accountingService.createTask`,
-  `courseService.create/update`, `forumService.createReply`) → wrapped in EF
-  Core transactions.
-- **Emailing plaintext passwords** (welcome/offer-letter emails) → replaced
-  with a one-time "set your password" link using the same password-reset-token
-  mechanism, since passwords are no longer recoverable once hashed.
+- **Un-transacted multi-statement writes** (task creation, course
+  create/update, forum replies) → wrapped in EF Core transactions.
+- **Emailing plaintext passwords** in welcome/offer-letter emails → replaced
+  with a one-time "set your password" link via the password-reset-token
+  mechanism, since passwords aren't recoverable once hashed.
 - **`/export/students` and `/export/courses`** called service methods that
   don't exist in the source (`listStudents`/`listCourses` vs. the real
   `getAll`) — dead code in the original; implemented for real here.
@@ -157,26 +295,29 @@ Fixed rather than ported, since they're bugs, not intended behavior:
 ## Not ported
 
 - `chat_groups` / `chat_group_messages` / `private_chat_threads` /
-  `private_chat_messages` tables exist in the schema but have **no** routes in
-  `server/src/index.js` — dead feature, so no controller was written. The
-  entities/EF configuration exist if you want to build routes on them later.
-- `/ai/generate-questions` is ported as the same demo stub the source app had
-  (no real AI call wired up).
+  `private_chat_messages` — tables exist in the schema (and as EF entities
+  here) but had **zero** routes in `server/src/index.js`. Dead feature; no
+  controller was written. Build on the existing entities if this needs to
+  become real.
+- `/ai/generate-questions` — ported as the same demo stub the source had
+  (generates fake sample questions, no real AI call wired up).
 
 ## Verification performed
 
-- `dotnet build` across the full solution — clean, 0 errors.
-- `dotnet ef database update` applied cleanly against a **live Neon database**
-  (not just `migrations add` — the actual DDL ran and all 27 enum types + 40
-  tables exist there now).
-- Seeded and logged in as the default admin and faculty accounts against that
-  live database — real bcrypt verification, real JWT issued.
-- Exercised real read/write/cascade flows against Neon: created a course,
-  created a student (which triggers the accounting-task side effect in a real
-  transaction), listed the resulting accounting task, then deleted the student
-  and course again to leave the database clean (`ON DELETE CASCADE` removed
-  the task automatically).
-- `GET /students` without a token returns 401; `POST /auth/login` against an
-  unreachable DB correctly surfaces as 500, not misclassified as a 400.
-- Not yet tested from the React frontend (`src/services/api.js` still points
-  at the old backend) — that's the natural next step.
+- Full solution build — clean, 0 errors.
+- `dotnet ef database update` applied against a **live Neon database**: all
+  27 enum types and 40 tables created for real, not just validated at the
+  model level.
+- Logged in as the seeded admin and faculty accounts against that live
+  database — real bcrypt verification, real JWT issued.
+- Exercised full read/write/cascade flows against Neon: created a course,
+  created a student (triggering the accounting-task side effect inside a
+  transaction), listed the resulting task, then deleted both — `ON DELETE
+  CASCADE` removed the task automatically, confirmed empty afterward.
+- Route-by-route diff of all 118 original Express routes against the live
+  ASP.NET Core route table — 118/118 present, one addition (`GET
+  /students/{id}`, never exposed by the source app).
+- Full feature-folder reorganization re-verified end-to-end afterward
+  (build + live login) to confirm no regressions from the restructuring.
+- Not yet tested from the React frontend with real user flows beyond login —
+  do that next.

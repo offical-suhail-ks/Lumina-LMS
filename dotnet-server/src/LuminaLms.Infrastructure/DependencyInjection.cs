@@ -1,9 +1,7 @@
 using LuminaLms.Application.Auth;
 using LuminaLms.Application.Common;
-using LuminaLms.Application.Services;
 using LuminaLms.Infrastructure.Options;
 using LuminaLms.Infrastructure.Persistence;
-using LuminaLms.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
